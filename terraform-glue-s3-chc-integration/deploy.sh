@@ -28,22 +28,37 @@ if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
     echo "Please enter your AWS credentials:"
     echo ""
 
-    read -p "AWS Access Key ID (AKIA...): " AWS_ACCESS_KEY_ID
-    read -sp "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
-    echo ""
-    read -p "AWS Region [ap-northeast-2]: " AWS_REGION
-    AWS_REGION=${AWS_REGION:-ap-northeast-2}
+    read -p "AWS Access Key ID (AKIA...): " INPUT_KEY_ID
+    read -sp "AWS Secret Access Key: " INPUT_SECRET_KEY
+    echo ""  # New line after secret input
+    read -p "AWS Region [ap-northeast-2]: " INPUT_REGION
+    INPUT_REGION=${INPUT_REGION:-ap-northeast-2}
 
     # Export for this session
-    export AWS_ACCESS_KEY_ID
-    export AWS_SECRET_ACCESS_KEY
-    export AWS_REGION
+    export AWS_ACCESS_KEY_ID="$INPUT_KEY_ID"
+    export AWS_SECRET_ACCESS_KEY="$INPUT_SECRET_KEY"
+    export AWS_REGION="$INPUT_REGION"
 
     echo ""
     echo -e "${GREEN}✓ Credentials set for this session${NC}"
 else
     echo -e "${GREEN}✓ Using existing environment credentials${NC}"
-    AWS_REGION=${AWS_REGION:-ap-northeast-2}
+    export AWS_REGION=${AWS_REGION:-ap-northeast-2}
+fi
+
+# Verify credentials
+echo ""
+echo "Verifying AWS credentials..."
+if aws sts get-caller-identity &>/dev/null; then
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+    echo -e "${GREEN}✓ Credentials valid${NC}"
+    echo "  Account: $ACCOUNT_ID"
+    echo "  User: $USER_ARN"
+else
+    echo -e "${RED}✗ Invalid AWS credentials${NC}"
+    echo "  Please check your Access Key ID and Secret Access Key"
+    exit 1
 fi
 
 echo ""
@@ -72,7 +87,8 @@ echo ""
 # ==================== Step 3: Deploy Infrastructure ====================
 echo -e "${BLUE}Step 3/5: Deploying AWS infrastructure (S3 + Glue)...${NC}"
 
-if [ ! -f "terraform.tfstate" ]; then
+if [ ! -d ".terraform" ]; then
+    echo "Initializing Terraform..."
     terraform init
 fi
 
@@ -92,9 +108,11 @@ echo ""
 echo -e "${BLUE}Step 4/5: Creating and uploading Iceberg table...${NC}"
 
 # Install required Python packages
-pip3 install -q pyiceberg pandas pyarrow
+echo "Installing Python dependencies..."
+pip3 install -q pyiceberg pandas pyarrow 2>&1 | grep -v "already satisfied" || true
 
 # Run Python script to create Iceberg table
+echo "Creating Iceberg table..."
 python3 ./scripts/create-iceberg-table.py
 
 if [ $? -ne 0 ]; then
@@ -109,10 +127,11 @@ echo ""
 echo -e "${BLUE}Step 5/5: Running Glue Crawler...${NC}"
 
 CRAWLER_NAME=$(terraform output -raw glue_crawler_name)
-AWS_REGION=$(terraform output -raw aws_region)
+CRAWLER_REGION=$(terraform output -raw aws_region)
 
 # Start the crawler
-aws glue start-crawler --name "$CRAWLER_NAME" --region "$AWS_REGION"
+echo "Starting Glue Crawler: $CRAWLER_NAME"
+aws glue start-crawler --name "$CRAWLER_NAME" --region "$CRAWLER_REGION"
 
 echo -e "${YELLOW}Crawler started. Waiting for completion (this takes ~2 minutes)...${NC}"
 
@@ -122,7 +141,7 @@ ELAPSED=0
 INTERVAL=10
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
-    STATUS=$(aws glue get-crawler --name "$CRAWLER_NAME" --region "$AWS_REGION" --query 'Crawler.State' --output text)
+    STATUS=$(aws glue get-crawler --name "$CRAWLER_NAME" --region "$CRAWLER_REGION" --query 'Crawler.State' --output text)
 
     if [ "$STATUS" == "READY" ]; then
         echo -e "${GREEN}✓ Crawler completed successfully${NC}"
@@ -140,7 +159,21 @@ done
 
 if [ $ELAPSED -ge $TIMEOUT ]; then
     echo -e "${YELLOW}Warning: Crawler did not complete within timeout. Check status manually:${NC}"
-    echo "  aws glue get-crawler --name $CRAWLER_NAME --region $AWS_REGION"
+    echo "  aws glue get-crawler --name $CRAWLER_NAME --region $CRAWLER_REGION"
+fi
+
+echo ""
+
+# Verify table was created
+echo "Verifying Glue table..."
+GLUE_DB=$(terraform output -raw glue_database_name)
+TABLES=$(aws glue get-tables --database-name "$GLUE_DB" --region "$CRAWLER_REGION" --query 'TableList[*].Name' --output text)
+
+if [ -n "$TABLES" ]; then
+    echo -e "${GREEN}✓ Tables found in Glue Catalog:${NC} $TABLES"
+else
+    echo -e "${YELLOW}⚠ No tables found in Glue Catalog${NC}"
+    echo "  Run: aws glue get-tables --database-name $GLUE_DB --region $CRAWLER_REGION"
 fi
 
 echo ""
@@ -150,14 +183,34 @@ echo "=========================================="
 echo "Deployment Complete!"
 echo "=========================================="
 echo ""
-
-# Get the connection info and replace placeholders with actual values
-CONNECTION_INFO=$(terraform output -raw clickhouse_connection_info)
-CONNECTION_INFO=${CONNECTION_INFO//\$AWS_ACCESS_KEY_ID/$AWS_ACCESS_KEY_ID}
-CONNECTION_INFO=${CONNECTION_INFO//\$AWS_SECRET_ACCESS_KEY/$AWS_SECRET_ACCESS_KEY}
-
-echo "$CONNECTION_INFO"
-
+echo "Infrastructure Created:"
+echo "-----------------------"
+echo "✓ S3 Bucket:      $(terraform output -raw s3_bucket_name)"
+echo "✓ Glue Database:  $(terraform output -raw glue_database_name)"
+echo "✓ Glue Crawler:   $(terraform output -raw glue_crawler_name)"
+echo "✓ AWS Region:     $(terraform output -raw aws_region)"
+if [ -n "$TABLES" ]; then
+    echo "✓ Glue Tables:    $TABLES"
+fi
+echo ""
+echo "ClickHouse DataLakeCatalog SQL:"
+echo "-------------------------------"
+echo "CREATE DATABASE glue_db"
+echo "ENGINE = DataLakeCatalog"
+echo "SETTINGS"
+echo "    catalog_type = 'glue',"
+echo "    region = '$(terraform output -raw aws_region)',"
+echo "    glue_database = '$(terraform output -raw glue_database_name)',"
+echo "    aws_access_key_id = '$AWS_ACCESS_KEY_ID',"
+echo "    aws_secret_access_key = '$AWS_SECRET_ACCESS_KEY';"
+echo ""
+echo "-- List all tables"
+echo "SHOW TABLES FROM glue_db;"
+echo ""
+echo "-- Query Iceberg table"
+echo "SELECT * FROM glue_db.\`sales_orders\` LIMIT 10;"
+echo ""
+echo "=========================================="
 echo ""
 echo -e "${GREEN}Next Steps:${NC}"
 echo "  1. Copy the SQL commands above"
@@ -167,5 +220,5 @@ echo ""
 echo -e "${YELLOW}Important:${NC}"
 echo "  - AWS credentials are stored in environment variables for this session only"
 echo "  - They are NOT saved in any Terraform files"
-echo "  - If AWS SCP restricts IAM operations, some features may be limited"
+echo "  - To destroy resources later, run: ./destroy.sh"
 echo ""
