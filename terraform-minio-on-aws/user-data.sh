@@ -77,6 +77,21 @@ echo "  ✓ MinIO binary verified"
 
 # Create MinIO environment file
 echo "[7/10] Creating MinIO environment configuration..."
+
+# Validate credentials length
+USER_LENGTH=$${#minio_root_user}
+PASS_LENGTH=$${#minio_root_password}
+
+if [ $USER_LENGTH -lt 3 ]; then
+    echo "ERROR: MINIO_ROOT_USER must be at least 3 characters (current: $USER_LENGTH)"
+    exit 1
+fi
+
+if [ $PASS_LENGTH -lt 8 ]; then
+    echo "ERROR: MINIO_ROOT_PASSWORD must be at least 8 characters (current: $PASS_LENGTH)"
+    exit 1
+fi
+
 cat > /etc/default/minio <<EOF
 # MinIO local volumes
 MINIO_VOLUMES="${data_dir}"
@@ -87,9 +102,6 @@ MINIO_ROOT_PASSWORD=${minio_root_password}
 
 # MinIO options
 MINIO_OPTS="--console-address :9001"
-
-# MinIO address
-MINIO_ADDRESS=":9000"
 EOF
 chmod 640 /etc/default/minio
 chown root:minio-user /etc/default/minio

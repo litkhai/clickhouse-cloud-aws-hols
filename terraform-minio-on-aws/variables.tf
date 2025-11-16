@@ -38,13 +38,23 @@ variable "minio_root_user" {
   description = "MinIO root username (min 3 characters)"
   type        = string
   default     = "admin"
+
+  validation {
+    condition     = length(var.minio_root_user) >= 3
+    error_message = "MinIO root username must be at least 3 characters long."
+  }
 }
 
 variable "minio_root_password" {
   description = "MinIO root password (min 8 characters)"
   type        = string
   sensitive   = true
-  default     = "admin"
+  default     = "minioadmin"
+
+  validation {
+    condition     = length(var.minio_root_password) >= 8
+    error_message = "MinIO root password must be at least 8 characters long."
+  }
 }
 
 variable "minio_data_dir" {

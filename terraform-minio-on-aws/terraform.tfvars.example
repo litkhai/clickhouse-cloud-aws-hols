@@ -26,6 +26,7 @@ allowed_cidr_blocks = ["0.0.0.0/0"]
 use_elastic_ip      = true
 
 # MinIO Configuration
+# IMPORTANT: MinIO requires password to be at least 8 characters
 minio_root_user     = "admin"
-minio_root_password = "admin"
+minio_root_password = "minioadmin"  # Must be at least 8 characters
 minio_data_dir      = "/mnt/data"

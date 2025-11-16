@@ -98,7 +98,7 @@ use_elastic_ip      = true
 
 # MinIO Configuration
 minio_root_user     = "admin"
-minio_root_password = "admin"
+minio_root_password = "minioadmin"  # Must be at least 8 characters
 minio_data_dir      = "/mnt/data"
 ```
 
@@ -143,8 +143,8 @@ Access the MinIO web console using the `minio_console_url` from the output:
 | `ebs_volume_size` | EBS volume size in GB | `250` |
 | `key_pair_name` | EC2 key pair name | - (required) |
 | `allowed_cidr_blocks` | CIDR blocks allowed to access | `["0.0.0.0/0"]` (public) |
-| `minio_root_user` | MinIO root username | `admin` |
-| `minio_root_password` | MinIO root password | `admin` |
+| `minio_root_user` | MinIO root username (min 3 chars) | `admin` |
+| `minio_root_password` | MinIO root password (min 8 chars) | `minioadmin` |
 | `minio_data_dir` | MinIO data directory path | `/mnt/data` |
 | `use_elastic_ip` | Enable Elastic IP allocation | `true` |
 
@@ -248,8 +248,10 @@ terraform destroy
    - Restrict `allowed_cidr_blocks` to your IP address
    - Use VPN or Bastion host for production environments
 
-3. **MinIO Password**:
-   - Use strong passwords (minimum 8 characters)
+3. **MinIO Credentials**:
+   - Username must be at least 3 characters
+   - Password must be at least 8 characters (MinIO requirement)
+   - Use strong passwords for production
    - Rotate passwords regularly
 
 4. **HTTPS Configuration**:
