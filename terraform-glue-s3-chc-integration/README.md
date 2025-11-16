@@ -105,28 +105,43 @@ aws glue start-crawler --name chc-glue-integration-iceberg-crawler --region ap-n
 aws glue get-tables --database-name clickhouse_iceberg_db --region ap-northeast-2
 ```
 
-### 5. Create IAM User for Access Keys
+### 5. Get AWS Credentials for ClickHouse
 
-⚠️ **Note**: ClickHouse DataLakeCatalog currently only supports access keys (not IAM Role). Due to AWS SCP restrictions, IAM User creation must be done manually.
+⚠️ **Important**: ClickHouse DataLakeCatalog requires **long-term access keys** (not session tokens or temporary credentials).
 
-#### Automated Setup (Recommended)
+#### Check Your Current Credentials
 
-Ask your AWS administrator to run the automated script:
+```bash
+./scripts/get-current-credentials.sh
+```
 
+This will show your credential type:
+- **AKIA prefix** → Long-term credentials ✅ (works with ClickHouse)
+- **ASIA prefix** → Temporary credentials ❌ (requires session token - not supported)
+
+#### If You Have Temporary Credentials (ASIA)
+
+Your current SSO/assumed role credentials include a session token that ClickHouse doesn't support yet. You have two options:
+
+**Option A: Request Long-Term IAM User (Recommended)**
+
+Ask your AWS administrator to run:
 ```bash
 ./scripts/create-iam-user-for-admin.sh
 ```
 
-This will:
-1. ✅ Create IAM User with required permissions
-2. ✅ Generate access keys
-3. ✅ Display ClickHouse SQL commands with credentials
+This creates an IAM User with long-term credentials.
 
-#### Manual Setup (Alternative)
+**Option B: Use Alternative Method**
 
-See [IAM_USER_LIMITATION.md](IAM_USER_LIMITATION.md) for step-by-step manual instructions.
+See [CREDENTIAL_SOLUTIONS.md](CREDENTIAL_SOLUTIONS.md) for:
+- Alternative ClickHouse engines (IcebergS3)
+- Direct S3 table functions
+- Detailed troubleshooting
 
-**Save the credentials**: AccessKeyId and SecretAccessKey
+#### If You Have Long-Term Credentials (AKIA)
+
+Use the output from `get-current-credentials.sh` directly in ClickHouse!
 
 ### 6. Configure ClickHouse Cloud
 
