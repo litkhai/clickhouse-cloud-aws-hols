@@ -206,30 +206,45 @@ if [ "$KEY_PAIR_CONFIGURED" = false ]; then
     echo ""
 
     # List available key pairs if AWS CLI is available
+    KEY_PAIRS=()
     if command_exists aws && aws ec2 describe-key-pairs >/dev/null 2>&1; then
-        echo "Available key pairs in your AWS account:"
-        aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output table 2>/dev/null || echo "  (Could not list key pairs)"
-        echo ""
-    fi
+        print_info "Fetching available key pairs from AWS..."
 
-    echo "Options:"
-    echo "  1. Enter an existing EC2 key pair name"
-    echo "  2. Skip SSH configuration (MinIO will still be accessible via web)"
-    echo ""
-    read -p "Enter your choice (1-2): " key_choice
+        # Get key pairs as array
+        mapfile -t KEY_PAIRS < <(aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output text 2>/dev/null | tr '\t' '\n')
 
-    case $key_choice in
-        1)
+        if [ ${#KEY_PAIRS[@]} -gt 0 ]; then
             echo ""
-            read -p "Enter your EC2 key pair name: " key_pair_name
+            echo "Available key pairs in your AWS account:"
+            echo "=========================================="
+            for i in "${!KEY_PAIRS[@]}"; do
+                printf "  %2d. %s\n" $((i+1)) "${KEY_PAIRS[$i]}"
+            done
+            echo "=========================================="
+            echo ""
 
-            if [ -z "$key_pair_name" ]; then
-                print_error "Key pair name cannot be empty"
-                exit 1
-            fi
+            echo "Options:"
+            echo "  1-${#KEY_PAIRS[@]}. Select a key pair by number"
+            echo "  0. Enter a key pair name manually"
+            echo "  s. Skip SSH configuration (MinIO will still be accessible via web)"
+            echo ""
+            read -p "Enter your choice: " key_choice
 
-            # Verify key pair exists (if AWS CLI is available)
-            if command_exists aws; then
+            if [ "$key_choice" = "s" ] || [ "$key_choice" = "S" ]; then
+                print_warning "Skipping SSH key pair configuration"
+                print_info "You will not be able to SSH into the instance"
+                print_info "MinIO will still be accessible via web console and API"
+                echo ""
+            elif [ "$key_choice" = "0" ]; then
+                echo ""
+                read -p "Enter your EC2 key pair name: " key_pair_name
+
+                if [ -z "$key_pair_name" ]; then
+                    print_error "Key pair name cannot be empty"
+                    exit 1
+                fi
+
+                # Verify key pair exists
                 if aws ec2 describe-key-pairs --key-names "$key_pair_name" >/dev/null 2>&1; then
                     print_success "Key pair '$key_pair_name' verified"
                 else
@@ -240,31 +255,112 @@ if [ "$KEY_PAIR_CONFIGURED" = false ]; then
                         exit 0
                     fi
                 fi
-            fi
 
-            # Update terraform.tfvars
-            if grep -q "^# key_pair_name" terraform.tfvars; then
-                sed -i.bak "s|^# key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
-            elif grep -q "^key_pair_name" terraform.tfvars; then
-                sed -i.bak "s|^key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                # Update terraform.tfvars
+                if grep -q "^# key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^# key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                elif grep -q "^key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                else
+                    echo "key_pair_name = \"$key_pair_name\"" >> terraform.tfvars
+                fi
+                rm -f terraform.tfvars.bak
+
+                print_success "Key pair configured: $key_pair_name"
+            elif [[ "$key_choice" =~ ^[0-9]+$ ]] && [ "$key_choice" -ge 1 ] && [ "$key_choice" -le ${#KEY_PAIRS[@]} ]; then
+                # Valid number selection
+                selected_index=$((key_choice-1))
+                key_pair_name="${KEY_PAIRS[$selected_index]}"
+
+                print_success "Selected key pair: $key_pair_name"
+
+                # Update terraform.tfvars
+                if grep -q "^# key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^# key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                elif grep -q "^key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                else
+                    echo "key_pair_name = \"$key_pair_name\"" >> terraform.tfvars
+                fi
+                rm -f terraform.tfvars.bak
+
+                print_success "Key pair configured: $key_pair_name"
             else
-                echo "key_pair_name = \"$key_pair_name\"" >> terraform.tfvars
+                print_error "Invalid choice. Exiting."
+                exit 1
             fi
-            rm -f terraform.tfvars.bak
-
-            print_success "Key pair configured: $key_pair_name"
-            ;;
-        2)
-            print_warning "Skipping SSH key pair configuration"
-            print_info "You will not be able to SSH into the instance"
-            print_info "MinIO will still be accessible via web console and API"
+        else
+            print_warning "No key pairs found in your AWS account"
             echo ""
-            ;;
-        *)
-            print_error "Invalid choice. Exiting."
-            exit 1
-            ;;
-    esac
+            read -p "Would you like to enter a key pair name manually? (yes/no): " manual_choice
+
+            if [ "$manual_choice" = "yes" ]; then
+                read -p "Enter your EC2 key pair name: " key_pair_name
+
+                if [ -z "$key_pair_name" ]; then
+                    print_error "Key pair name cannot be empty"
+                    exit 1
+                fi
+
+                # Update terraform.tfvars
+                if grep -q "^# key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^# key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                elif grep -q "^key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                else
+                    echo "key_pair_name = \"$key_pair_name\"" >> terraform.tfvars
+                fi
+                rm -f terraform.tfvars.bak
+
+                print_success "Key pair configured: $key_pair_name"
+            else
+                print_warning "Skipping SSH key pair configuration"
+            fi
+        fi
+    else
+        # AWS CLI not available or can't access EC2
+        print_warning "Cannot list key pairs (AWS CLI not available or no permissions)"
+        echo ""
+        echo "Options:"
+        echo "  1. Enter an existing EC2 key pair name"
+        echo "  2. Skip SSH configuration (MinIO will still be accessible via web)"
+        echo ""
+        read -p "Enter your choice (1-2): " key_choice
+
+        case $key_choice in
+            1)
+                echo ""
+                read -p "Enter your EC2 key pair name: " key_pair_name
+
+                if [ -z "$key_pair_name" ]; then
+                    print_error "Key pair name cannot be empty"
+                    exit 1
+                fi
+
+                # Update terraform.tfvars
+                if grep -q "^# key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^# key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                elif grep -q "^key_pair_name" terraform.tfvars; then
+                    sed -i.bak "s|^key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+                else
+                    echo "key_pair_name = \"$key_pair_name\"" >> terraform.tfvars
+                fi
+                rm -f terraform.tfvars.bak
+
+                print_success "Key pair configured: $key_pair_name"
+                ;;
+            2)
+                print_warning "Skipping SSH key pair configuration"
+                print_info "You will not be able to SSH into the instance"
+                print_info "MinIO will still be accessible via web console and API"
+                echo ""
+                ;;
+            *)
+                print_error "Invalid choice. Exiting."
+                exit 1
+                ;;
+        esac
+    fi
 fi
 
 echo ""
