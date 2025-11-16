@@ -34,6 +34,12 @@ variable "clickhouse_external_id" {
   default     = "clickhouse-external-id-12345"
 }
 
+variable "existing_clickhouse_role_name" {
+  description = "Name of existing IAM Role to use for ClickHouse (if null, will try to create new role)"
+  type        = string
+  default     = null
+}
+
 variable "enable_glue_crawler" {
   description = "Enable automatic Glue crawler for catalog updates"
   type        = bool

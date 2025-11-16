@@ -1,43 +1,47 @@
 # Terraform AWS Glue S3 ClickHouse Cloud Integration
 
-Terraform configuration to set up AWS infrastructure for **ClickHouse Cloud Iceberg Table Engine** integration with:
+Terraform configuration to set up AWS infrastructure for **ClickHouse Cloud Glue Catalog Integration** with:
 - AWS S3 bucket with Apache Iceberg formatted data
-- AWS Glue Data Catalog as Iceberg catalog
+- AWS Glue Data Catalog for metadata management
+- **DataLakeCatalog** engine for database-level integration
 - Sample Iceberg table: `sales_orders`
-- IAM Role for ClickHouse Cloud access
-- Automated Glue Crawlers for catalog updates
+- Automated Glue Crawlers for table discovery
 
 ## Overview
 
-This project enables **ClickHouse Cloud to query Apache Iceberg tables** using:
-- **IcebergS3 Engine**: Query Iceberg tables directly from S3
-- **IcebergGlueCatalog Engine**: Use AWS Glue as Iceberg catalog
-- **AWS Glue Data Catalog**: Centralized metadata management
-- **IAM Role**: Secure access without long-lived credentials
+This project enables **ClickHouse Cloud to query entire AWS Glue Catalog databases** using the **DataLakeCatalog engine**. This provides:
 
-### Key Use Case
+### Key Feature: Database-Level Integration
 
-Test and develop with ClickHouse Cloud's **Iceberg Table Engine** to query data lake tables managed by Apache Iceberg format.
+Instead of creating individual table definitions, mount an entire Glue database as a ClickHouse database:
+
+```sql
+-- One command to access all tables in Glue Catalog
+CREATE DATABASE glue_db ENGINE = DataLakeCatalog SETTINGS ...;
+
+-- All tables automatically available
+SHOW TABLES FROM glue_db;
+SELECT * FROM glue_db.`sales_orders`;
+```
+
+### Benefits
+
+- ✅ **Automatic table discovery**: All Glue tables immediately available in ClickHouse
+- ✅ **Schema synchronization**: Changes in Glue reflected automatically
+- ✅ **Simplified management**: No individual table definitions needed
+- ✅ **Unified authentication**: Single credential for all catalog tables
+- ✅ **Production-ready**: ACID guarantees from Apache Iceberg
 
 ## Prerequisites
 
 1. **Terraform** (>= 1.0)
 2. **AWS CLI** (configured with credentials)
-3. **Python 3** (for sample data generation)
+3. **Python 3** (for Iceberg table generation)
 4. **ClickHouse Cloud account** (in the same AWS region)
 5. **AWS Account** with permissions to create:
    - S3 buckets
    - AWS Glue databases and crawlers
-   - IAM users and policies
-
-## Features
-
-- ✅ **S3 Bucket**: Encrypted, versioned bucket for data storage
-- ✅ **AWS Glue Catalog**: Database and crawlers for Iceberg tables
-- ✅ **Automated Crawlers**: Schedule-based catalog updates
-- ✅ **IAM Integration**: Dedicated user with minimal permissions
-- ✅ **Sample Data**: Pre-generated CSV, Parquet, Avro, and Iceberg files
-- ✅ **ClickHouse Ready**: Output includes connection details and SQL examples
+   - IAM roles and policies
 
 ## Quick Start
 
@@ -47,29 +51,27 @@ Test and develop with ClickHouse Cloud's **Iceberg Table Engine** to query data 
 # Using environment variables
 export AWS_ACCESS_KEY_ID="your-access-key"
 export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_REGION="us-east-1"  # Must match ClickHouse Cloud region
+export AWS_REGION="ap-northeast-2"  # Must match ClickHouse Cloud region
 
 # Or use AWS CLI
 aws configure
 ```
 
-### 2. Create Configuration File
+### 2. Configure Terraform Variables (Optional)
+
+This project automatically uses existing IAM Roles if available, avoiding the need to create new ones.
 
 ```bash
+# Copy example configuration
 cp terraform.tfvars.example terraform.tfvars
+
+# Edit to use existing role (recommended)
+existing_clickhouse_role_name = "clickhouse-role"  # or any existing role
 ```
 
-Edit `terraform.tfvars`:
-
-```hcl
-# AWS Configuration
-aws_region = "us-east-1"  # Must match ClickHouse Cloud region
-
-# Project Configuration
-project_name         = "chc-glue-integration"
-glue_database_name   = "clickhouse_iceberg_db"
-enable_glue_crawler  = true
-```
+**Smart Role Detection**:
+- If `existing_clickhouse_role_name` is set: Terraform will use that role and add required S3 + Glue permissions
+- If `null` (default): Terraform will try to create a new role (may fail due to AWS SCP restrictions)
 
 ### 3. Deploy Infrastructure
 
@@ -84,132 +86,119 @@ terraform plan
 terraform apply
 ```
 
-### 4. Upload Sample Data & Run Crawlers
+**What gets created**:
+- ✅ S3 bucket with encryption and versioning
+- ✅ Glue Database and Crawlers
+- ✅ IAM policies attached to existing or new role
+- ✅ Required permissions for S3 and Glue access
+
+### 4. Create Iceberg Table & Register in Glue
 
 ```bash
-# One command: creates sample data, uploads to S3, and runs crawlers automatically
-./scripts/upload-sample-data.sh
+# Create proper Iceberg table with metadata
+python3 ./scripts/create-iceberg-table.py
+
+# Register table in Glue Catalog
+aws glue start-crawler --name chc-glue-integration-iceberg-crawler --region ap-northeast-2
+
+# Wait 2-3 minutes, then verify
+aws glue get-tables --database-name clickhouse_iceberg_db --region ap-northeast-2
 ```
 
-This script will:
-- ✅ Generate sample CSV data files locally (no Python dependencies needed)
-- ✅ Upload files to S3 (CSV, Parquet, Iceberg)
-- ✅ Start all Glue crawlers automatically
-- ✅ Wait for crawlers to complete (2-5 minutes)
-- ✅ Verify and display created tables in Glue Catalog
+### 5. Create IAM User for Access Keys
 
-**Created Tables:**
-- `sales_data_csv` - Transaction data with 10 sample records
-- `users_csv` - User demographics (5 users)
-- `parquet` - Product catalog data
-
-### 5. Get ClickHouse Integration Info
+⚠️ **Note**: ClickHouse DataLakeCatalog currently only supports access keys (not IAM Role). Due to AWS SCP restrictions, IAM User creation must be done manually. See [IAM_USER_LIMITATION.md](IAM_USER_LIMITATION.md) for detailed instructions.
 
 ```bash
-# View all integration details
-terraform output clickhouse_integration_info
+# Create IAM User
+aws iam create-user --user-name chc-glue-integration-glue-user
 
-# Get AWS credentials for ClickHouse
-terraform output clickhouse_access_key_id
-terraform output -raw clickhouse_secret_access_key
+# Attach policy from IAM_USER_LIMITATION.md
+aws iam put-user-policy \
+  --user-name chc-glue-integration-glue-user \
+  --policy-name chc-glue-integration-glue-catalog-policy \
+  --policy-document file://glue-catalog-policy.json
+
+# Create access keys
+aws iam create-access-key --user-name chc-glue-integration-glue-user
 ```
 
-## ClickHouse Cloud Iceberg Integration
+**Save the output**: AccessKeyId and SecretAccessKey
 
-📖 **For detailed Iceberg integration guide, see [CLICKHOUSE_ICEBERG_GUIDE.md](./CLICKHOUSE_ICEBERG_GUIDE.md)**
-
-### Quick Test: Iceberg Table Engine
-
-After deployment, test the Iceberg table engine:
-
-#### Method 1: Direct S3 Path (IcebergS3)
+### 6. Configure ClickHouse Cloud
 
 ```sql
--- Create Iceberg table pointing to S3 location
-CREATE TABLE sales_orders
-ENGINE = IcebergS3(
-    's3://chc-iceberg-data-ACCOUNT_ID/iceberg/sales_orders/',
-    'AWS'
-)
-SETTINGS cloud_mode=1;
+-- Mount entire Glue database as ClickHouse database
+CREATE DATABASE glue_db
+ENGINE = DataLakeCatalog
+SETTINGS
+    catalog_type = 'glue',
+    region = 'ap-northeast-2',
+    glue_database = 'clickhouse_iceberg_db',
+    aws_access_key_id = '<YOUR_ACCESS_KEY_ID>',
+    aws_secret_access_key = '<YOUR_SECRET_ACCESS_KEY>';
 
--- Query the table
-SELECT * FROM sales_orders LIMIT 10;
+-- List all tables (automatically discovered from Glue)
+SHOW TABLES FROM glue_db;
 
--- Aggregate query
+-- Query Iceberg table (use backticks)
+SELECT * FROM glue_db.`sales_orders` LIMIT 10;
+
+-- Run analytics
 SELECT
     category,
     COUNT(*) as order_count,
-    SUM(price * quantity) as total_revenue
-FROM sales_orders
+    SUM(price * quantity) as revenue
+FROM glue_db.`sales_orders`
 GROUP BY category
-ORDER BY total_revenue DESC;
+ORDER BY revenue DESC;
 ```
 
-#### Method 2: AWS Glue Catalog (IcebergGlueCatalog)
+## Integration Methods
+
+### Method 1: DataLakeCatalog (Recommended - Database Level) ✅
+
+**Use this for**: Production use, multiple tables, automatic discovery
 
 ```sql
--- Get your Catalog ID
--- terraform output glue_catalog_id
+-- Step 1: Create database from Glue Catalog
+CREATE DATABASE glue_db
+ENGINE = DataLakeCatalog
+SETTINGS
+    catalog_type = 'glue',
+    region = 'ap-northeast-2',
+    glue_database = 'clickhouse_iceberg_db',
+    aws_access_key_id = '<YOUR_KEY>',
+    aws_secret_access_key = '<YOUR_SECRET>';
 
--- Create table using Glue Catalog
-CREATE TABLE sales_orders_glue
-ENGINE = IcebergGlueCatalog(
-    'catalog_id=123456789012',  -- Your AWS Account ID
-    'database=clickhouse_iceberg_db',
-    'table=sales_orders',
-    'region=ap-northeast-2'
-)
-SETTINGS cloud_mode=1;
+-- Step 2: All tables automatically available
+SHOW TABLES FROM glue_db;
 
--- Query the table
-SELECT * FROM sales_orders_glue;
+-- Step 3: Query any table (use backticks)
+SELECT * FROM glue_db.`sales_orders` LIMIT 10;
+SELECT * FROM glue_db.`other_table` LIMIT 10;
 ```
 
-### Alternative: Query CSV/Parquet from S3
+**Benefits**:
+- ✅ Automatic table discovery
+- ✅ Schema synchronization
+- ✅ Single authentication
+- ✅ Simplified management
 
-If you just want to test S3 access (not Iceberg):
+### Method 2: IcebergS3 (Alternative - Table Level)
+
+**Use this for**: Single table access, testing, or when Glue is not needed
 
 ```sql
--- Query CSV files from S3
-SELECT * FROM s3(
-    's3://chc-iceberg-data-ACCOUNT_ID/csv/*.csv',
-    'CSV'
-)
-LIMIT 10;
-
--- Query Parquet files from S3
-SELECT * FROM s3(
-    's3://chc-iceberg-data-ACCOUNT_ID/parquet/*.parquet',
-    'Parquet'
-)
-LIMIT 10;
-
--- Create table from S3 Parquet
-CREATE TABLE products_local
-ENGINE = MergeTree()
-ORDER BY product_id
-AS SELECT * FROM s3(
-    's3://your-bucket-name/parquet/products/*.parquet',
+CREATE TABLE sales_orders
+ENGINE = IcebergS3(
+    's3://chc-iceberg-data-123456789012/iceberg/sales_orders/',
     'AWS',
-    'AKIAXXXXX',
-    'xxxxx',
-    'Parquet'
+    '<YOUR_ACCESS_KEY_ID>',
+    '<YOUR_SECRET_ACCESS_KEY>'
 );
-```
 
-### Using S3 Table Function with Glue Catalog
-
-```sql
--- Query using Glue Catalog schema
-SELECT * FROM s3Cluster(
-    'default',
-    's3://your-bucket-name/csv/users/*.csv',
-    'AWS',
-    'AKIAXXXXX',
-    'xxxxx'
-)
-SETTINGS schema_inference_use_cache_for_s3 = 1;
+SELECT * FROM sales_orders LIMIT 10;
 ```
 
 ## Architecture
@@ -218,22 +207,26 @@ SETTINGS schema_inference_use_cache_for_s3 = 1;
 ┌─────────────────────────────────────────────────────────┐
 │                   ClickHouse Cloud                       │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │  IcebergGlueCatalog / S3 Table Engine            │  │
+│  │         CREATE DATABASE glue_db                  │  │
+│  │         ENGINE = DataLakeCatalog                 │  │
+│  │                                                  │  │
+│  │  glue_db.sales_orders  (auto-discovered)        │  │
+│  │  glue_db.other_table   (auto-discovered)        │  │
 │  └────────────────┬─────────────────────────────────┘  │
 └───────────────────┼─────────────────────────────────────┘
                     │
-                    │ IAM Credentials
+                    │ AWS Access Keys
                     │
         ┌───────────▼────────────────┐
         │      AWS Account           │
         │  ┌──────────────────────┐  │
         │  │   AWS Glue Catalog   │  │
-        │  │  ┌────────────────┐  │  │
-        │  │  │  Database      │  │  │
-        │  │  │  - sales_data  │  │  │
-        │  │  │  - users       │  │  │
-        │  │  │  - products    │  │  │
-        │  │  └────────────────┘  │  │
+        │  │  Database:           │  │
+        │  │  clickhouse_iceberg_db  │
+        │  │                      │  │
+        │  │  Tables:             │  │
+        │  │  - sales_orders      │  │
+        │  │  - (auto-discovered) │  │
         │  │                      │  │
         │  │  Glue Crawlers       │  │
         │  │  (Auto-update)       │  │
@@ -241,32 +234,86 @@ SETTINGS schema_inference_use_cache_for_s3 = 1;
         │             │              │
         │  ┌──────────▼───────────┐  │
         │  │    S3 Bucket         │  │
-        │  │  /csv/               │  │
-        │  │  /parquet/           │  │
-        │  │  /avro/              │  │
         │  │  /iceberg/           │  │
-        │  │    /sales_data/      │  │
+        │  │    /sales_orders/    │  │
         │  │      /metadata/      │  │
+        │  │        v1.metadata.json │
+        │  │        version-hint.text│
         │  │      /data/          │  │
+        │  │        data-001.parquet │
         │  └──────────────────────┘  │
         └────────────────────────────┘
 ```
 
 ## Sample Data
 
-The project includes sample data generation for:
+### sales_orders Table
 
-### Sales Data (1,000 records)
-- Transaction data with user, product, and pricing information
-- Available in CSV, Parquet, and Iceberg formats
+The project creates a sample Iceberg table with:
 
-### Users Table (100 records)
-- User demographics and account information
-- Available in CSV format
+- **10 records** across 5 categories (Electronics, Books, Clothing, Food, Sports)
+- **Partitioned by** `order_date` for efficient queries
+- **Schema**:
+  - id (Int64)
+  - user_id (String)
+  - product_id (String)
+  - category (String)
+  - quantity (Int64)
+  - price (Double)
+  - order_date (Date)
+  - description (String)
 
-### Products Table (50 records)
-- Product catalog with pricing and inventory
-- Available in Parquet format
+## Example Queries
+
+### Basic Queries
+
+```sql
+-- Count by category
+SELECT category, COUNT(*) as cnt
+FROM glue_db.`sales_orders`
+GROUP BY category;
+
+-- Revenue by date
+SELECT order_date, SUM(price * quantity) as revenue
+FROM glue_db.`sales_orders`
+GROUP BY order_date
+ORDER BY order_date;
+```
+
+### Advanced Queries
+
+```sql
+-- Top products with partition pruning
+SELECT product_id, category, SUM(price * quantity) as revenue
+FROM glue_db.`sales_orders`
+WHERE order_date = '2024-01-01'  -- Only scans one partition
+GROUP BY product_id, category
+ORDER BY revenue DESC
+LIMIT 5;
+
+-- Average order value
+SELECT
+    category,
+    AVG(price * quantity) as avg_order_value,
+    COUNT(*) as order_count
+FROM glue_db.`sales_orders`
+GROUP BY category;
+```
+
+### Working with Multiple Tables
+
+```sql
+-- List all tables in catalog
+SHOW TABLES FROM glue_db;
+
+-- Describe schema
+DESCRIBE glue_db.`sales_orders`;
+
+-- Query multiple tables
+SELECT 'sales' as source, COUNT(*) FROM glue_db.`sales_orders`
+UNION ALL
+SELECT 'other' as source, COUNT(*) FROM glue_db.`other_table`;
+```
 
 ## Configuration Variables
 
@@ -277,180 +324,183 @@ The project includes sample data generation for:
 | `s3_bucket_prefix` | S3 bucket name prefix | `chc-iceberg-data` |
 | `glue_database_name` | Glue database name | `clickhouse_iceberg_db` |
 | `enable_glue_crawler` | Enable automatic crawlers | `true` |
-| `crawler_schedule` | Crawler schedule (cron) | `cron(0/5 * * * ? *)` |
+| `crawler_schedule` | Crawler schedule (cron) | None (manual trigger) |
 | `tags` | Common tags for resources | See variables.tf |
 
 ## Outputs
 
 After deployment, Terraform provides:
 
-- `s3_bucket_name`: S3 bucket for data storage
-- `glue_database_name`: Glue database name
-- `glue_catalog_id`: AWS account ID (Glue Catalog ID)
-- `clickhouse_access_key_id`: IAM access key for ClickHouse
-- `clickhouse_secret_access_key`: IAM secret key (sensitive)
-- `clickhouse_integration_info`: Complete integration guide
+```bash
+# View all integration info
+terraform output clickhouse_integration_info
 
-## AWS Glue Crawler Configuration
-
-The crawlers are configured to:
-- **Schedule**: Run every 5 minutes (configurable)
-- **Schema Changes**: Update database on changes
-- **New Data**: Crawl only new folders
-- **Partitions**: Inherit from table configuration
-
-To modify the crawler schedule:
-
-```hcl
-crawler_schedule = "cron(0 */2 * * ? *)"  # Every 2 hours
+# Get specific values
+terraform output s3_bucket_name         # chc-iceberg-data-123456789012
+terraform output glue_database_name     # clickhouse_iceberg_db
+terraform output aws_region             # ap-northeast-2
 ```
 
-## Security Best Practices
+## Verifying Setup
 
-1. **IAM Permissions**: The created IAM user has minimal permissions:
-   - Read-only access to S3 bucket
-   - Read-only access to Glue Catalog
-   - No write or delete permissions
+### Check Glue Catalog
 
-2. **S3 Security**:
-   - Server-side encryption enabled (AES256)
-   - Versioning enabled for data protection
-   - Public access blocked
+```bash
+# List tables in Glue
+aws glue get-tables \
+    --database-name clickhouse_iceberg_db \
+    --region ap-northeast-2
 
-3. **Credentials Management**:
-   - Secret access key is marked as sensitive
-   - Use `terraform output -raw clickhouse_secret_access_key` to retrieve
-   - Rotate credentials regularly
+# Check crawler status
+aws glue get-crawler \
+    --name chc-glue-integration-iceberg-crawler \
+    --region ap-northeast-2
+```
 
-4. **Network Access**:
-   - ClickHouse Cloud must be in the same AWS region
-   - Consider using VPC endpoints for production
+### Verify S3 Files
+
+```bash
+# Check Iceberg structure
+aws s3 ls s3://chc-iceberg-data-123456789012/iceberg/sales_orders/ --recursive
+
+# Expected structure:
+# metadata/v1.metadata.json
+# metadata/version-hint.text
+# data/data-001.parquet
+```
 
 ## Troubleshooting
 
-### Crawler Not Finding Tables
+### Table Not Visible in ClickHouse
+
+1. Verify table exists in Glue:
+   ```bash
+   aws glue get-table --database-name clickhouse_iceberg_db --name sales_orders --region ap-northeast-2
+   ```
+
+2. Check IAM permissions (see IAM_USER_LIMITATION.md)
+
+3. Recreate DataLakeCatalog database in ClickHouse
+
+### Access Denied Errors
+
+1. Verify IAM User has S3 and Glue permissions
+2. Test credentials manually:
+   ```bash
+   aws s3 ls s3://chc-iceberg-data-123456789012/ --profile <your-profile>
+   ```
+
+### Glue Crawler Issues
 
 ```bash
-# Check crawler status
-aws glue get-crawler --name <crawler-name>
+# Start crawler manually
+aws glue start-crawler --name chc-glue-integration-iceberg-crawler --region ap-northeast-2
 
-# View crawler logs
-aws logs tail /aws-glue/crawlers --follow
+# Check crawler logs
+aws glue get-crawler --name chc-glue-integration-iceberg-crawler --region ap-northeast-2
 ```
 
-### Permission Issues
+## Adding More Tables
 
-```bash
-# Test IAM user permissions
-aws s3 ls s3://bucket-name --profile clickhouse-user
+### Automatic (Recommended)
 
-# Verify Glue access
-aws glue get-databases --profile clickhouse-user
+1. Add Iceberg table to S3:
+   ```bash
+   # Upload to: s3://bucket/iceberg/new_table/
+   ```
+
+2. Run Glue Crawler:
+   ```bash
+   aws glue start-crawler --name chc-glue-integration-iceberg-crawler --region ap-northeast-2
+   ```
+
+3. Table automatically appears in ClickHouse:
+   ```sql
+   SHOW TABLES FROM glue_db;  -- new_table appears
+   SELECT * FROM glue_db.`new_table`;
+   ```
+
+## Security Best Practices
+
+1. **IAM Permissions**: Minimal permissions (read-only S3 and Glue)
+2. **S3 Security**: Encryption enabled, versioning on, public access blocked
+3. **Credentials**: Store in AWS Secrets Manager for production
+4. **Network**: Use VPC endpoints for private access
+5. **Monitoring**: Enable CloudTrail and S3 access logging
+
+## Performance Tips
+
+### 1. Partition Pruning
+
+```sql
+-- Efficient: Only scans relevant partitions
+SELECT * FROM glue_db.`sales_orders`
+WHERE order_date = '2024-01-01';
 ```
 
-### ClickHouse Connection Issues
+### 2. Column Projection
 
-1. Verify AWS region matches between ClickHouse Cloud and resources
-2. Check IAM credentials are correct
-3. Ensure S3 bucket and Glue Catalog are accessible
-4. Check ClickHouse Cloud logs for detailed error messages
-
-### Data Not Appearing in Catalog
-
-```bash
-# Manually trigger crawler
-aws glue start-crawler --name <crawler-name>
-
-# Check crawler run history
-aws glue get-crawler-metrics --crawler-name-list <crawler-name>
+```sql
+-- Efficient: Reads only needed columns
+SELECT category, SUM(price * quantity)
+FROM glue_db.`sales_orders`
+GROUP BY category;
 ```
+
+### 3. Predicate Pushdown
+
+```sql
+-- Filters pushed to Iceberg
+SELECT * FROM glue_db.`sales_orders`
+WHERE category = 'Electronics' AND quantity > 2;
+```
+
+## Comparison: Integration Methods
+
+| Feature | DataLakeCatalog | IcebergS3 |
+|---------|----------------|-----------|
+| **Level** | Database | Table |
+| **Discovery** | Automatic | Manual |
+| **Schema Sync** | Yes | No |
+| **Setup** | Simple | Per-table |
+| **Use Case** | Production | Testing |
+| **Recommended** | ✅ Yes | For specific needs |
 
 ## Cost Estimation
 
-Approximate monthly costs for typical usage:
+Approximate monthly costs:
 
-- **S3 Storage**: ~$0.023/GB (Standard)
+- **S3 Storage**: ~$0.023/GB
 - **Glue Crawler**: ~$0.44/hour (only when running)
-- **Glue Catalog**: First 1M objects free, $1/100k after
-- **Data Transfer**: Varies by usage
+- **Glue Catalog**: First 1M objects free
+- **Data Transfer**: Varies
 
-Example: 10GB data with hourly crawlers ≈ $6-10/month
+Example: 10GB + hourly crawlers ≈ $6-10/month
 
 ## Cleanup
-
-To destroy all resources:
 
 ```bash
 # Remove all resources
 terraform destroy
 
-# Clean up local files (optional)
-rm -rf .terraform terraform.tfstate* sample-data/
+# Clean up local files
+rm -rf .terraform terraform.tfstate*
 ```
 
-**Warning**: This will permanently delete:
-- S3 bucket and all data
-- Glue database and catalog entries
-- IAM user and credentials
+**Warning**: Permanently deletes S3 bucket, Glue database, and IAM resources.
 
-## Advanced Usage
+## Documentation
 
-### Custom Iceberg Table
+- 📖 **[CLICKHOUSE_ICEBERG_GUIDE.md](./CLICKHOUSE_ICEBERG_GUIDE.md)** - Complete integration guide
+- 📖 **[IAM_USER_LIMITATION.md](./IAM_USER_LIMITATION.md)** - IAM User manual setup
+- 📖 **[DEPLOYMENT_FIXES.md](./DEPLOYMENT_FIXES.md)** - Deployment troubleshooting history
 
-```sql
--- Create Iceberg table with custom configuration
-CREATE TABLE custom_iceberg
-ENGINE = IcebergGlueCatalog(
-    'catalog_id=123456789012',
-    'database=clickhouse_iceberg_db',
-    'table=my_custom_table',
-    'aws_access_key_id=AKIAXXXXX',
-    'aws_secret_access_key=xxxxx',
-    'region=us-east-1'
-)
-SETTINGS iceberg_engine_ignore_schema_evolution = 1;
-```
+## Additional Resources
 
-### Querying Partitioned Data
-
-```sql
--- Iceberg supports partition pruning
-SELECT * FROM sales_data
-WHERE toDate(timestamp) = '2024-01-15'
-  AND category = 'Electronics';
-```
-
-### Materialized Views with S3 Data
-
-```sql
--- Create materialized view from S3 source
-CREATE MATERIALIZED VIEW mv_sales_summary
-ENGINE = SummingMergeTree()
-ORDER BY (category, date)
-AS SELECT
-    category,
-    toDate(timestamp) as date,
-    sum(quantity) as total_quantity,
-    sum(price * quantity) as total_revenue
-FROM s3(
-    's3://bucket-name/iceberg/sales_data/',
-    'AWS',
-    'AKIAXXXXX',
-    'xxxxx'
-)
-GROUP BY category, date;
-```
-
-## Contributing
-
-Suggestions and improvements are welcome! Please:
-1. Test changes thoroughly
-2. Update documentation
-3. Follow Terraform best practices
-
-## License
-
-MIT License
+- [ClickHouse DataLakeCatalog Documentation](https://clickhouse.com/docs/use-cases/data-lake/glue-catalog)
+- [Apache Iceberg Specification](https://iceberg.apache.org/spec/)
+- [AWS Glue Data Catalog](https://docs.aws.amazon.com/glue/latest/dg/catalog-and-crawler.html)
+- [ClickHouse Iceberg Table Engine](https://clickhouse.com/docs/en/engines/table-engines/integrations/iceberg)
 
 ## Support
 
@@ -459,9 +509,6 @@ For issues related to:
 - **ClickHouse Cloud**: Contact ClickHouse support
 - **This project**: Open an issue in the repository
 
-## References
+## License
 
-- [ClickHouse Iceberg Documentation](https://clickhouse.com/docs/en/engines/table-engines/integrations/iceberg)
-- [AWS Glue Documentation](https://docs.aws.amazon.com/glue/)
-- [Apache Iceberg](https://iceberg.apache.org/)
-- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+MIT License

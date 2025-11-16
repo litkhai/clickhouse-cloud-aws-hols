@@ -24,19 +24,29 @@ output "glue_catalog_id" {
 }
 
 output "clickhouse_role_arn" {
-  description = "IAM Role ARN for ClickHouse Cloud to assume"
-  value       = aws_iam_role.clickhouse_role.arn
+  description = "IAM Role ARN for ClickHouse Cloud to assume (for S3 table function)"
+  value       = local.clickhouse_role_arn
 }
 
 output "clickhouse_role_name" {
   description = "IAM Role name for ClickHouse Cloud"
-  value       = aws_iam_role.clickhouse_role.name
+  value       = local.clickhouse_role_name
+}
+
+output "using_existing_role" {
+  description = "Whether using an existing IAM Role (true) or created new one (false)"
+  value       = var.existing_clickhouse_role_name != null
 }
 
 output "clickhouse_external_id" {
   description = "External ID for role assumption"
   value       = var.clickhouse_external_id
   sensitive   = true
+}
+
+output "manual_iam_user_instructions" {
+  description = "Instructions for manually creating IAM User for Glue Catalog integration"
+  value       = "IAM User creation blocked by AWS SCP. See IAM_USER_LIMITATION.md for manual setup instructions."
 }
 
 output "aws_region" {
@@ -59,57 +69,64 @@ output "clickhouse_integration_info" {
   value = <<-EOT
 
   ========================================
-  ClickHouse Cloud Iceberg Integration
+  ClickHouse Cloud Glue Catalog Integration
   ========================================
 
-  AWS IAM Role for ClickHouse Cloud:
-  -----------------------------------
-  Role ARN:          ${aws_iam_role.clickhouse_role.arn}
-  External ID:       (use: terraform output -raw clickhouse_external_id)
+  AWS Glue Catalog Credentials (DataLakeCatalog):
+  -----------------------------------------------
+  ⚠️  IAM User creation blocked by AWS SCP
+  See IAM_USER_LIMITATION.md for manual setup instructions
   AWS Region:        ${data.aws_region.current.name}
 
   Glue Catalog Information:
   -------------------------
-  Catalog ID:        ${data.aws_caller_identity.current.account_id}
   Database Name:     ${aws_glue_catalog_database.iceberg_db.name}
-  S3 Bucket:         s3://${aws_s3_bucket.iceberg_data.bucket}/
-
-  Sample Data Locations:
-  ----------------------
-  CSV files:     s3://${aws_s3_bucket.iceberg_data.bucket}/csv/
-  Parquet files: s3://${aws_s3_bucket.iceberg_data.bucket}/parquet/
-  Avro files:    s3://${aws_s3_bucket.iceberg_data.bucket}/avro/
-  Iceberg data:  s3://${aws_s3_bucket.iceberg_data.bucket}/iceberg/
+  S3 Bucket:         s3://${aws_s3_bucket.iceberg_data.bucket}/iceberg/
+  Iceberg Tables:    sales_orders
 
   Next Steps:
   -----------
-  1. Upload sample data & run crawlers: ./scripts/upload-sample-data.sh
-     (This automatically creates sample data, uploads to S3, and runs all crawlers)
+  1. Upload Iceberg data: python3 scripts/create-iceberg-table.py
+  2. Run Glue crawler: aws glue start-crawler --name chc-glue-integration-iceberg-crawler
+  3. Wait for crawler to complete (~2 minutes)
+  4. Create database in ClickHouse Cloud using DataLakeCatalog
 
-  2. In ClickHouse Cloud, configure IAM Role integration:
-     - Go to Settings > Integrations > AWS
-     - Add IAM Role ARN: ${aws_iam_role.clickhouse_role.arn}
-     - Add External ID from: terraform output -raw clickhouse_external_id
+  ClickHouse SQL (DataLakeCatalog - Database Level):
+  --------------------------------------------------
+  -- Step 1: Create database from Glue Catalog
+  CREATE DATABASE glue_db
+  ENGINE = DataLakeCatalog
+  SETTINGS
+      catalog_type = 'glue',
+      region = '${data.aws_region.current.name}',
+      glue_database = '${aws_glue_catalog_database.iceberg_db.name}',
+      aws_access_key_id = '<manually_created_access_key_id>',
+      aws_secret_access_key = '<manually_created_secret_access_key>';
 
-  ClickHouse SQL Example (Using IAM Role):
-  ----------------------------------------
-  -- Create S3 table function with IAM role
-  SELECT * FROM s3(
-    's3://${aws_s3_bucket.iceberg_data.bucket}/csv/*.csv',
-    'CSV'
-  ) LIMIT 10;
+  -- Step 2: List tables in the catalog
+  SHOW TABLES FROM glue_db;
 
-  -- Create Iceberg table with Glue Catalog
-  CREATE TABLE sales_iceberg
+  -- Step 3: Query Iceberg tables (use backticks for table names)
+  SELECT * FROM glue_db.`sales_orders` LIMIT 10;
+
+  SELECT
+      category,
+      SUM(price * quantity) as revenue
+  FROM glue_db.`sales_orders`
+  GROUP BY category;
+
+  Alternative - Direct S3 Path (IcebergS3):
+  -----------------------------------------
+  -- Query Iceberg table directly from S3 using manually created IAM User
+  CREATE TABLE sales_orders
   ENGINE = IcebergS3(
-    's3://${aws_s3_bucket.iceberg_data.bucket}/iceberg/sales_data/',
-    'AWS'
+      's3://${aws_s3_bucket.iceberg_data.bucket}/iceberg/sales_orders/',
+      'AWS',
+      '<manually_created_access_key_id>',
+      '<manually_created_secret_access_key>'
   );
 
-  -- Query the table
-  SELECT category, COUNT(*) as cnt, SUM(price * quantity) as revenue
-  FROM sales_iceberg
-  GROUP BY category;
+  SELECT * FROM sales_orders;
 
   ========================================
   EOT

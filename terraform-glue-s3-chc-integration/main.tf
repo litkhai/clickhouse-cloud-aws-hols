@@ -231,9 +231,16 @@ resource "aws_glue_crawler" "parquet_crawler" {
   tags = var.tags
 }
 
-# IAM Role for ClickHouse Cloud integration
+# Try to use existing IAM Role if specified, otherwise create new one
+data "aws_iam_role" "existing_clickhouse_role" {
+  count = var.existing_clickhouse_role_name != null ? 1 : 0
+  name  = var.existing_clickhouse_role_name
+}
+
+# IAM Role for ClickHouse Cloud S3 integration (only created if no existing role specified)
 resource "aws_iam_role" "clickhouse_role" {
-  name = "${var.project_name}-clickhouse-role"
+  count = var.existing_clickhouse_role_name == null ? 1 : 0
+  name  = "${var.project_name}-clickhouse-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -256,10 +263,17 @@ resource "aws_iam_role" "clickhouse_role" {
   tags = var.tags
 }
 
-# IAM policy for ClickHouse to access S3 and Glue
+# Local value to determine which role to use
+locals {
+  clickhouse_role_name = var.existing_clickhouse_role_name != null ? data.aws_iam_role.existing_clickhouse_role[0].name : aws_iam_role.clickhouse_role[0].name
+  clickhouse_role_arn  = var.existing_clickhouse_role_name != null ? data.aws_iam_role.existing_clickhouse_role[0].arn : aws_iam_role.clickhouse_role[0].arn
+}
+
+# IAM policy for ClickHouse Role to access S3 and Glue
+# This policy is attached whether using existing or new role
 resource "aws_iam_role_policy" "clickhouse_policy" {
   name = "${var.project_name}-clickhouse-policy"
-  role = aws_iam_role.clickhouse_role.id
+  role = local.clickhouse_role_name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -296,3 +310,15 @@ resource "aws_iam_role_policy" "clickhouse_policy" {
     ]
   })
 }
+
+# NOTE: IAM User creation is blocked by AWS SCP in this account
+# For DataLakeCatalog integration, you need to manually create an IAM User
+# with access keys. See IAM_USER_LIMITATION.md for manual setup instructions.
+#
+# Required IAM User Policy (for manual creation):
+# - S3 permissions: GetObject, ListBucket, GetBucketLocation
+# - Glue permissions: GetDatabase, GetDatabases, GetTable, GetTables, GetPartition, GetPartitions, BatchGetPartition
+# - Resources: S3 bucket (below) and Glue database 'clickhouse_iceberg_db'
+#
+# S3 Bucket ARN: ${aws_s3_bucket.iceberg_data.arn}
+# Glue Database: clickhouse_iceberg_db
