@@ -94,7 +94,7 @@ key_pair_name   = "YOUR_KEY_PAIR_NAME"
 
 # Network Configuration
 allowed_cidr_blocks = ["0.0.0.0/0"]  # Allows access from any IP (public endpoint)
-use_elastic_ip      = true
+use_elastic_ip      = false  # Set to true for production to get stable IP
 
 # MinIO Configuration
 minio_root_user     = "admin"
@@ -146,7 +146,7 @@ Access the MinIO web console using the `minio_console_url` from the output:
 | `minio_root_user` | MinIO root username (min 3 chars) | `admin` |
 | `minio_root_password` | MinIO root password (min 8 chars) | `minioadmin` |
 | `minio_data_dir` | MinIO data directory path | `/mnt/data` |
-| `use_elastic_ip` | Enable Elastic IP allocation | `true` |
+| `use_elastic_ip` | Enable Elastic IP allocation | `false` |
 
 ## Recommended Instance Types
 

@@ -23,7 +23,7 @@ ebs_volume_size = 250
 # Allows access from any IP address (public endpoint)
 # For production, consider restricting to specific IPs (e.g., ["1.2.3.4/32"])
 allowed_cidr_blocks = ["0.0.0.0/0"]
-use_elastic_ip      = true
+use_elastic_ip      = false  # Set to true for production to get stable IP
 
 # MinIO Configuration
 # IMPORTANT: MinIO requires password to be at least 8 characters

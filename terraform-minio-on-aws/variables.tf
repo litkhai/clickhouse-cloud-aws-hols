@@ -66,5 +66,5 @@ variable "minio_data_dir" {
 variable "use_elastic_ip" {
   description = "Whether to allocate and associate an Elastic IP"
   type        = bool
-  default     = true
+  default     = false
 }
