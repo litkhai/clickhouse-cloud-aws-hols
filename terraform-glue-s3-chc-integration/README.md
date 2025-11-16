@@ -1,18 +1,23 @@
 # Terraform AWS Glue S3 ClickHouse Cloud Integration
 
-Terraform configuration to set up AWS infrastructure for ClickHouse Cloud integration with:
-- AWS S3 bucket for data storage
-- AWS Glue Data Catalog with Iceberg support
-- Sample data in multiple formats (CSV, Parquet, Avro, Iceberg)
+Terraform configuration to set up AWS infrastructure for **ClickHouse Cloud Iceberg Table Engine** integration with:
+- AWS S3 bucket with Apache Iceberg formatted data
+- AWS Glue Data Catalog as Iceberg catalog
+- Sample Iceberg table: `sales_orders`
+- IAM Role for ClickHouse Cloud access
 - Automated Glue Crawlers for catalog updates
-- IAM credentials for ClickHouse Cloud access
 
 ## Overview
 
-This project creates the necessary AWS infrastructure to enable ClickHouse Cloud to work with:
-- **Apache Iceberg tables** via AWS Glue Catalog
-- **S3-based data lakes** with various file formats
-- **Automated schema discovery** through Glue Crawlers
+This project enables **ClickHouse Cloud to query Apache Iceberg tables** using:
+- **IcebergS3 Engine**: Query Iceberg tables directly from S3
+- **IcebergGlueCatalog Engine**: Use AWS Glue as Iceberg catalog
+- **AWS Glue Data Catalog**: Centralized metadata management
+- **IAM Role**: Secure access without long-lived credentials
+
+### Key Use Case
+
+Test and develop with ClickHouse Cloud's **Iceberg Table Engine** to query data lake tables managed by Apache Iceberg format.
 
 ## Prerequisites
 
@@ -109,51 +114,73 @@ terraform output clickhouse_access_key_id
 terraform output -raw clickhouse_secret_access_key
 ```
 
-## ClickHouse Cloud Integration
+## ClickHouse Cloud Iceberg Integration
 
-### Using Iceberg with Glue Catalog
+📖 **For detailed Iceberg integration guide, see [CLICKHOUSE_ICEBERG_GUIDE.md](./CLICKHOUSE_ICEBERG_GUIDE.md)**
+
+### Quick Test: Iceberg Table Engine
+
+After deployment, test the Iceberg table engine:
+
+#### Method 1: Direct S3 Path (IcebergS3)
 
 ```sql
--- Create external Iceberg table in ClickHouse Cloud
-CREATE TABLE sales_data
-ENGINE = IcebergGlueCatalog(
-    'catalog_id=123456789012',
-    'database=clickhouse_iceberg_db',
-    'table=sales_data',
-    'aws_access_key_id=AKIAXXXXX',
-    'aws_secret_access_key=xxxxx',
-    'region=us-east-1'
+-- Create Iceberg table pointing to S3 location
+CREATE TABLE sales_orders
+ENGINE = IcebergS3(
+    's3://chc-iceberg-data-ACCOUNT_ID/iceberg/sales_orders/',
+    'AWS'
 )
+SETTINGS cloud_mode=1;
 
--- Query the Iceberg table
+-- Query the table
+SELECT * FROM sales_orders LIMIT 10;
+
+-- Aggregate query
 SELECT
     category,
     COUNT(*) as order_count,
     SUM(price * quantity) as total_revenue
-FROM sales_data
+FROM sales_orders
 GROUP BY category
 ORDER BY total_revenue DESC;
 ```
 
-### Using S3 Tables Directly
+#### Method 2: AWS Glue Catalog (IcebergGlueCatalog)
+
+```sql
+-- Get your Catalog ID
+-- terraform output glue_catalog_id
+
+-- Create table using Glue Catalog
+CREATE TABLE sales_orders_glue
+ENGINE = IcebergGlueCatalog(
+    'catalog_id=123456789012',  -- Your AWS Account ID
+    'database=clickhouse_iceberg_db',
+    'table=sales_orders',
+    'region=ap-northeast-2'
+)
+SETTINGS cloud_mode=1;
+
+-- Query the table
+SELECT * FROM sales_orders_glue;
+```
+
+### Alternative: Query CSV/Parquet from S3
+
+If you just want to test S3 access (not Iceberg):
 
 ```sql
 -- Query CSV files from S3
 SELECT * FROM s3(
-    's3://your-bucket-name/csv/*.csv',
-    'AWS',
-    'AKIAXXXXX',
-    'xxxxx',
+    's3://chc-iceberg-data-ACCOUNT_ID/csv/*.csv',
     'CSV'
 )
 LIMIT 10;
 
 -- Query Parquet files from S3
 SELECT * FROM s3(
-    's3://your-bucket-name/parquet/*.parquet',
-    'AWS',
-    'AKIAXXXXX',
-    'xxxxx',
+    's3://chc-iceberg-data-ACCOUNT_ID/parquet/*.parquet',
     'Parquet'
 )
 LIMIT 10;
