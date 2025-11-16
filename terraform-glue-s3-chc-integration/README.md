@@ -107,23 +107,26 @@ aws glue get-tables --database-name clickhouse_iceberg_db --region ap-northeast-
 
 ### 5. Create IAM User for Access Keys
 
-⚠️ **Note**: ClickHouse DataLakeCatalog currently only supports access keys (not IAM Role). Due to AWS SCP restrictions, IAM User creation must be done manually. See [IAM_USER_LIMITATION.md](IAM_USER_LIMITATION.md) for detailed instructions.
+⚠️ **Note**: ClickHouse DataLakeCatalog currently only supports access keys (not IAM Role). Due to AWS SCP restrictions, IAM User creation must be done manually.
+
+#### Automated Setup (Recommended)
+
+Ask your AWS administrator to run the automated script:
 
 ```bash
-# Create IAM User
-aws iam create-user --user-name chc-glue-integration-glue-user
-
-# Attach policy from IAM_USER_LIMITATION.md
-aws iam put-user-policy \
-  --user-name chc-glue-integration-glue-user \
-  --policy-name chc-glue-integration-glue-catalog-policy \
-  --policy-document file://glue-catalog-policy.json
-
-# Create access keys
-aws iam create-access-key --user-name chc-glue-integration-glue-user
+./scripts/create-iam-user-for-admin.sh
 ```
 
-**Save the output**: AccessKeyId and SecretAccessKey
+This will:
+1. ✅ Create IAM User with required permissions
+2. ✅ Generate access keys
+3. ✅ Display ClickHouse SQL commands with credentials
+
+#### Manual Setup (Alternative)
+
+See [IAM_USER_LIMITATION.md](IAM_USER_LIMITATION.md) for step-by-step manual instructions.
+
+**Save the credentials**: AccessKeyId and SecretAccessKey
 
 ### 6. Configure ClickHouse Cloud
 

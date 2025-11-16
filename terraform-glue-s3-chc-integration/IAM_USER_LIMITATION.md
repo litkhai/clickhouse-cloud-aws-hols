@@ -18,7 +18,32 @@ ClickHouse Cloud's **DataLakeCatalog engine for Glue** currently **only supports
 
 Since Terraform cannot create IAM Users in this account, you need to manually create an IAM User with the required permissions.
 
-### Step 1: Create IAM User Manually
+### Option 1: Automated Script (Recommended)
+
+We provide a script that automates the entire process. **Ask your AWS administrator** to run:
+
+```bash
+cd terraform-glue-s3-chc-integration
+./scripts/create-iam-user-for-admin.sh
+```
+
+This script will:
+1. ✅ Create IAM User: `chc-glue-integration-glue-user`
+2. ✅ Attach required S3 and Glue permissions
+3. ✅ Generate access keys
+4. ✅ Display credentials and ClickHouse SQL commands
+
+**Output example**:
+```
+AWS Access Key ID:     AKIAIOSFODNN7EXAMPLE
+AWS Secret Access Key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+### Option 2: Manual Steps
+
+If you prefer manual creation, follow these steps:
+
+#### Step 1: Create IAM User
 
 Use the AWS Console or ask an administrator with `iam:CreateUser` permission:
 
@@ -26,7 +51,7 @@ Use the AWS Console or ask an administrator with `iam:CreateUser` permission:
 aws iam create-user --user-name chc-glue-integration-glue-user
 ```
 
-### Step 2: Attach Policy to IAM User
+#### Step 2: Attach Policy to IAM User
 
 Create and attach the following policy:
 
@@ -76,7 +101,7 @@ aws iam put-user-policy \
   --policy-document file://glue-catalog-policy.json
 ```
 
-### Step 3: Create Access Keys
+#### Step 3: Create Access Keys
 
 ```bash
 aws iam create-access-key --user-name chc-glue-integration-glue-user
@@ -86,7 +111,7 @@ Save the output:
 - AccessKeyId
 - SecretAccessKey
 
-### Step 4: Use in ClickHouse Cloud
+## Using the Credentials in ClickHouse Cloud
 
 ```sql
 CREATE DATABASE glue_db
