@@ -256,23 +256,65 @@ terraform destroy
 
 ## Troubleshooting
 
+### Check Installation Logs
+
+The installation script creates detailed logs that can help diagnose issues:
+
+```bash
+# View the complete installation log
+sudo cat /var/log/minio-setup.log
+
+# Check if installation completed successfully
+sudo cat /var/log/minio-installation-complete
+
+# View cloud-init output logs
+sudo cat /var/log/cloud-init-output.log
+
+# View real-time MinIO service logs
+sudo journalctl -u minio -f
+```
+
 ### MinIO Service Not Starting
 
 ```bash
 # SSH into the instance and check status
 sudo systemctl status minio
+
+# Check recent MinIO logs
 sudo journalctl -u minio -n 50
+
+# Verify MinIO configuration
+sudo cat /etc/default/minio
+
+# Check if MinIO binary is present
+ls -la /usr/local/bin/minio
+
+# Test MinIO binary
+sudo -u minio-user /usr/local/bin/minio --version
 ```
 
-### Check user-data Script Execution Logs
+### Installation Script Features
 
-```bash
-sudo cat /var/log/cloud-init-output.log
-```
+The enhanced user-data script includes:
+- **Comprehensive Logging**: All output is logged to `/var/log/minio-setup.log`
+- **Step-by-Step Progress**: Shows progress through 10 installation steps
+- **Error Handling**: Exits immediately on errors with detailed error messages
+- **Package Verification**: Verifies all required commands are available
+- **Health Checks**: Waits up to 60 seconds for MinIO to become healthy
+- **Installation Summary**: Creates detailed completion report in `/var/log/minio-installation-complete`
 
 ### Verify Firewall Configuration
 
 Check that required ports (9000, 9001, 22) are open in the Security Group settings
+
+### Manual MinIO Restart
+
+If MinIO needs to be restarted:
+
+```bash
+sudo systemctl restart minio
+sudo systemctl status minio
+```
 
 ## AWS Authentication Methods
 
