@@ -78,9 +78,13 @@ echo "  ✓ MinIO binary verified"
 # Create MinIO environment file
 echo "[7/10] Creating MinIO environment configuration..."
 
+# Store credentials in variables
+MINIO_USER="${minio_root_user}"
+MINIO_PASS="${minio_root_password}"
+
 # Validate credentials length
-USER_LENGTH=$${#minio_root_user}
-PASS_LENGTH=$${#minio_root_password}
+USER_LENGTH=$${#MINIO_USER}
+PASS_LENGTH=$${#MINIO_PASS}
 
 if [ $USER_LENGTH -lt 3 ]; then
     echo "ERROR: MINIO_ROOT_USER must be at least 3 characters (current: $USER_LENGTH)"

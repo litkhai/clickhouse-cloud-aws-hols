@@ -389,6 +389,7 @@ echo ""
 INSTANCE_TYPE=$(grep "^instance_type" terraform.tfvars | cut -d'"' -f2 2>/dev/null || echo "c5.xlarge")
 EBS_SIZE=$(grep "^ebs_volume_size" terraform.tfvars | awk '{print $3}' 2>/dev/null || echo "250")
 MINIO_USER=$(grep "^minio_root_user" terraform.tfvars | cut -d'"' -f2 2>/dev/null || echo "admin")
+MINIO_PASSWORD=$(grep "^minio_root_password" terraform.tfvars | cut -d'"' -f2 2>/dev/null || echo "minioadmin")
 
 echo "  Instance Type: $INSTANCE_TYPE"
 echo "  EBS Volume: ${EBS_SIZE}GB"
@@ -499,7 +500,7 @@ echo "=========================================="
 echo ""
 echo "1. MinIO installation may take 2-3 minutes to complete"
 echo "2. Access the MinIO Console at: $CONSOLE_URL"
-echo "3. Default credentials: admin / admin"
+echo "3. MinIO credentials: $MINIO_USER / $MINIO_PASSWORD"
 echo "   ⚠️  IMPORTANT: Change credentials for production use!"
 echo "4. Security group allows access from 0.0.0.0/0 (public)"
 echo "5. For production, consider:"
