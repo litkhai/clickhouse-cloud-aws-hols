@@ -10,6 +10,7 @@ Terraform scripts to deploy a single-node MinIO server on AWS EC2.
 
 ## Features
 
+- **Ubuntu 22.04 LTS**: Uses Ubuntu Server following MinIO's official documentation
 - **Configurable Instance Type**: Default `c5.xlarge`, customizable
 - **EBS Volume Size**: Default `250GB`, customizable
 - **AWS Authentication**: Uses standard AWS environment variables
@@ -218,7 +219,8 @@ terraform output -json minio_credentials
 ## SSH Access
 
 ```bash
-ssh -i /path/to/your-key.pem ec2-user@<PUBLIC_IP>
+# SSH to Ubuntu instance (default user is 'ubuntu')
+ssh -i /path/to/your-key.pem ubuntu@<PUBLIC_IP>
 
 # Check MinIO status
 sudo systemctl status minio
@@ -277,7 +279,10 @@ sudo journalctl -u minio -f
 ### MinIO Service Not Starting
 
 ```bash
-# SSH into the instance and check status
+# SSH into the instance (Ubuntu default user)
+ssh -i /path/to/your-key.pem ubuntu@<PUBLIC_IP>
+
+# Check MinIO service status
 sudo systemctl status minio
 
 # Check recent MinIO logs
@@ -296,6 +301,7 @@ sudo -u minio-user /usr/local/bin/minio --version
 ### Installation Script Features
 
 The enhanced user-data script includes:
+- **Ubuntu 22.04 LTS**: Uses Ubuntu Server with apt package manager
 - **Comprehensive Logging**: All output is logged to `/var/log/minio-setup.log`
 - **Step-by-Step Progress**: Shows progress through 10 installation steps
 - **Error Handling**: Exits immediately on errors with detailed error messages

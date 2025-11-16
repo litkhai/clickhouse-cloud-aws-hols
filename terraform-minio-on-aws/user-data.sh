@@ -5,7 +5,7 @@ exec > >(tee -a /var/log/minio-setup.log)
 exec 2>&1
 
 echo "=========================================="
-echo "MinIO Installation Script"
+echo "MinIO Installation Script (Ubuntu)"
 echo "Started at: $(date)"
 echo "=========================================="
 
@@ -15,20 +15,22 @@ trap 'echo "ERROR: Script failed at line $LINENO with exit code $?" >&2' ERR
 
 # Update system packages
 echo "[1/10] Updating system packages..."
-dnf update -y || { echo "ERROR: Failed to update system packages"; exit 1; }
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y || { echo "ERROR: Failed to update package list"; exit 1; }
+apt-get upgrade -y || { echo "ERROR: Failed to upgrade system packages"; exit 1; }
 
 # Install required packages
 echo "[2/10] Installing required packages..."
-dnf install -y \
+apt-get install -y \
     wget \
     curl \
     tar \
     gzip \
-    util-linux \
     systemd \
-    procps-ng \
+    procps \
     net-tools \
-    bind-utils \
+    dnsutils \
+    ca-certificates \
     || { echo "ERROR: Failed to install required packages"; exit 1; }
 
 # Verify critical commands are available

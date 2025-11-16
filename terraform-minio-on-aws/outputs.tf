@@ -25,7 +25,7 @@ output "minio_api_endpoint" {
 
 output "ssh_connection_command" {
   description = "SSH command to connect to the instance"
-  value       = "ssh -i /path/to/${var.key_pair_name}.pem ec2-user@${var.use_elastic_ip ? aws_eip.minio_eip[0].public_ip : aws_instance.minio.public_ip}"
+  value       = "ssh -i /path/to/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.minio_eip[0].public_ip : aws_instance.minio.public_ip}"
 }
 
 output "minio_credentials" {
