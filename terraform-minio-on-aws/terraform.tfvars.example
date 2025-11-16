@@ -13,14 +13,19 @@
 instance_name   = "minio-server"
 instance_type   = "c5.xlarge"
 ebs_volume_size = 250
-key_pair_name   = "YOUR_KEY_PAIR_NAME"
+
+# SSH Key Pair (optional)
+# If not set, SSH access will not be available
+# Uncomment and set to your EC2 key pair name if you need SSH access
+# key_pair_name = "YOUR_KEY_PAIR_NAME"
 
 # Network Configuration
-# Replace with your IP address for better security (e.g., ["1.2.3.4/32"])
+# Allows access from any IP address (public endpoint)
+# For production, consider restricting to specific IPs (e.g., ["1.2.3.4/32"])
 allowed_cidr_blocks = ["0.0.0.0/0"]
 use_elastic_ip      = true
 
 # MinIO Configuration
-minio_root_user     = "minioadmin"
-minio_root_password = "minioadmin123"
+minio_root_user     = "admin"
+minio_root_password = "admin"
 minio_data_dir      = "/mnt/data"

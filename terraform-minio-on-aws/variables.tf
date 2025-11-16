@@ -23,8 +23,9 @@ variable "ebs_volume_size" {
 }
 
 variable "key_pair_name" {
-  description = "Name of the EC2 key pair for SSH access"
+  description = "Name of the EC2 key pair for SSH access. If not provided, SSH access will not be available"
   type        = string
+  default     = null
 }
 
 variable "allowed_cidr_blocks" {
@@ -36,14 +37,14 @@ variable "allowed_cidr_blocks" {
 variable "minio_root_user" {
   description = "MinIO root username (min 3 characters)"
   type        = string
-  default     = "minioadmin"
+  default     = "admin"
 }
 
 variable "minio_root_password" {
   description = "MinIO root password (min 8 characters)"
   type        = string
   sensitive   = true
-  default     = "minioadmin"
+  default     = "admin"
 }
 
 variable "minio_data_dir" {

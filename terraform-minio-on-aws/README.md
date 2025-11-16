@@ -16,8 +16,42 @@ Terraform scripts to deploy a single-node MinIO server on AWS EC2.
 - **Security Group**: Automatically configures MinIO API (9000), Console (9001), and SSH (22) ports
 - **Elastic IP**: Optional stable public IP allocation
 - **Automated Installation**: MinIO automatically installed and configured via user-data script
+- **Automated Deployment Scripts**: Quick deployment and cleanup with shell scripts
 
-## Deployment Instructions
+## Quick Start (Automated)
+
+The easiest way to deploy is using the provided deployment script:
+
+```bash
+# 1. Configure AWS credentials
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_REGION="us-east-1"  # Optional
+
+# Or use AWS CLI
+aws configure
+
+# 2. Run deployment script
+./deploy.sh
+```
+
+The script will:
+- Check prerequisites (Terraform, AWS credentials)
+- Create terraform.tfvars if needed
+- Initialize Terraform
+- Show execution plan
+- Deploy all resources
+- Display MinIO access information
+
+### Cleanup
+
+To destroy all resources:
+
+```bash
+./destroy.sh
+```
+
+## Manual Deployment Instructions
 
 ### 1. Configure AWS Credentials and Region
 
@@ -58,12 +92,12 @@ ebs_volume_size = 250               # Change to desired EBS size (GB)
 key_pair_name   = "YOUR_KEY_PAIR_NAME"
 
 # Network Configuration
-allowed_cidr_blocks = ["YOUR_IP/32"]  # Restrict to your IP for better security
+allowed_cidr_blocks = ["0.0.0.0/0"]  # Allows access from any IP (public endpoint)
 use_elastic_ip      = true
 
 # MinIO Configuration
-minio_root_user     = "minioadmin"
-minio_root_password = "minioadmin123"  # Change to a strong password
+minio_root_user     = "admin"
+minio_root_password = "admin"
 minio_data_dir      = "/mnt/data"
 ```
 
@@ -107,9 +141,9 @@ Access the MinIO web console using the `minio_console_url` from the output:
 | `instance_type` | EC2 instance type | `c5.xlarge` |
 | `ebs_volume_size` | EBS volume size in GB | `250` |
 | `key_pair_name` | EC2 key pair name | - (required) |
-| `allowed_cidr_blocks` | CIDR blocks allowed to access | `["0.0.0.0/0"]` |
-| `minio_root_user` | MinIO root username | `minioadmin` |
-| `minio_root_password` | MinIO root password | `minioadmin` |
+| `allowed_cidr_blocks` | CIDR blocks allowed to access | `["0.0.0.0/0"]` (public) |
+| `minio_root_user` | MinIO root username | `admin` |
+| `minio_root_password` | MinIO root password | `admin` |
 | `minio_data_dir` | MinIO data directory path | `/mnt/data` |
 | `use_elastic_ip` | Enable Elastic IP allocation | `true` |
 
@@ -121,6 +155,52 @@ Recommended instance types based on MinIO usage:
 - **Small Production**: `c5.xlarge` (default), `c5.2xlarge`
 - **Medium Production**: `c5.4xlarge`, `c5.9xlarge`
 - **Large Production**: `c5.12xlarge`, `c5.18xlarge` or memory-optimized `r5` series
+
+## Deployment Scripts
+
+### deploy.sh
+
+Automated deployment script that handles the entire deployment process:
+
+**Features:**
+- Validates prerequisites (Terraform, AWS credentials)
+- Creates terraform.tfvars from template if needed
+- Runs terraform init, plan, and apply
+- Shows deployment information after completion
+- Provides MinIO access URLs and credentials
+
+**Usage:**
+```bash
+./deploy.sh
+```
+
+**What it checks:**
+- Terraform installation
+- AWS CLI installation (optional)
+- AWS credentials (environment variables or AWS CLI config)
+- AWS region configuration
+- Existing terraform.tfvars file
+- EC2 key pair configuration
+
+### destroy.sh
+
+Automated cleanup script to remove all deployed resources:
+
+**Features:**
+- Shows current deployment information
+- Confirms destruction with double-check
+- Removes all AWS resources (EC2, Security Group, Elastic IP)
+- Optional cleanup of local Terraform files
+
+**Usage:**
+```bash
+./destroy.sh
+```
+
+**Safety features:**
+- Requires explicit "yes" confirmation
+- Requires typing "destroy" as second confirmation
+- Shows what will be destroyed before proceeding
 
 ## View Outputs
 
