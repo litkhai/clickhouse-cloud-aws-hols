@@ -23,9 +23,45 @@ echo ""
 echo -e "${BLUE}Step 1/5: AWS Credentials Setup${NC}"
 echo ""
 
-# Check if credentials are already in environment
-if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-    echo "Please enter your AWS credentials:"
+# Check if environment variables are already set
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+    echo "Found AWS credentials in environment variables"
+    echo "Verifying credentials..."
+
+    if aws sts get-caller-identity >/dev/null 2>&1; then
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+        echo -e "${GREEN}✓ Using environment variable credentials${NC}"
+        echo "  Account: $ACCOUNT_ID"
+        echo "  User: $USER_ARN"
+
+        # Set default region if not set
+        if [ -z "$AWS_REGION" ]; then
+            export AWS_REGION="ap-northeast-2"
+            echo "  Region: $AWS_REGION (default)"
+        else
+            echo "  Region: $AWS_REGION"
+        fi
+    else
+        echo -e "${RED}✗ Environment variables set but credentials are invalid${NC}"
+        exit 1
+    fi
+# Try AWS CLI configured credentials
+elif aws sts get-caller-identity >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Using AWS CLI configured credentials${NC}"
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+    echo "  Account: $ACCOUNT_ID"
+    echo "  User: $USER_ARN"
+
+    # Extract credentials from AWS CLI for Terraform
+    export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+    export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+    export AWS_REGION=$(aws configure get region || echo "ap-northeast-2")
+    echo "  Region: $AWS_REGION"
+else
+    # No valid credentials found, prompt user
+    echo "No valid AWS credentials found. Please enter your credentials:"
     echo ""
 
     read -p "AWS Access Key ID (AKIA...): " INPUT_KEY_ID
@@ -40,25 +76,18 @@ if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
     export AWS_REGION="$INPUT_REGION"
 
     echo ""
-    echo -e "${GREEN}✓ Credentials set for this session${NC}"
-else
-    echo -e "${GREEN}✓ Using existing environment credentials${NC}"
-    export AWS_REGION=${AWS_REGION:-ap-northeast-2}
-fi
-
-# Verify credentials
-echo ""
-echo "Verifying AWS credentials..."
-if aws sts get-caller-identity &>/dev/null; then
-    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
-    echo -e "${GREEN}✓ Credentials valid${NC}"
-    echo "  Account: $ACCOUNT_ID"
-    echo "  User: $USER_ARN"
-else
-    echo -e "${RED}✗ Invalid AWS credentials${NC}"
-    echo "  Please check your Access Key ID and Secret Access Key"
-    exit 1
+    echo "Verifying credentials..."
+    if aws sts get-caller-identity >/dev/null 2>&1; then
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+        echo -e "${GREEN}✓ Credentials valid${NC}"
+        echo "  Account: $ACCOUNT_ID"
+        echo "  User: $USER_ARN"
+    else
+        echo -e "${RED}✗ Invalid AWS credentials${NC}"
+        echo "  Please check your Access Key ID and Secret Access Key"
+        exit 1
+    fi
 fi
 
 echo ""
