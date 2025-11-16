@@ -35,10 +35,10 @@ aws_secret_access_key = "your-secret-key"
 aws_region            = "ap-northeast-2"  # Must match your ClickHouse Cloud region
 ```
 
-### 2. Run Setup (One Command)
+### 2. Deploy Infrastructure
 
 ```bash
-./quick-setup.sh
+./deploy.sh
 ```
 
 This will:
@@ -202,11 +202,12 @@ If you see permission denied errors for IAM operations:
 
 ```bash
 # Remove all resources
-terraform destroy
-
-# Clean up local state
-rm -rf .terraform terraform.tfstate*
+./destroy.sh
 ```
+
+This will:
+- Destroy all AWS resources (S3 bucket, Glue database, crawlers, IAM roles)
+- Optionally clean up local Terraform state files
 
 ⚠️ **Warning**: This permanently deletes the S3 bucket, Glue database, and all data.
 

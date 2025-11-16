@@ -1,5 +1,5 @@
 #!/bin/bash
-# One-command setup for ClickHouse Glue Catalog Integration
+# Deploy ClickHouse Glue Catalog Integration
 # This script: deploys infrastructure → creates sample data → runs crawler → shows connection info
 
 set -e
@@ -15,7 +15,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo "=========================================="
-echo "ClickHouse Glue Catalog - Quick Setup"
+echo "ClickHouse Glue Catalog - Deploy"
 echo "=========================================="
 echo ""
 
@@ -116,7 +116,7 @@ echo ""
 
 # ==================== Display Connection Info ====================
 echo "=========================================="
-echo "Setup Complete!"
+echo "Deployment Complete!"
 echo "=========================================="
 echo ""
 
