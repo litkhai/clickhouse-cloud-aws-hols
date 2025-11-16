@@ -1,0 +1,33 @@
+# AWS Configuration
+# Region must match your ClickHouse Cloud region
+# If not set, will use AWS_REGION or AWS_DEFAULT_REGION environment variable
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name         = "chc-glue-integration"
+s3_bucket_prefix     = "chc-iceberg-data"
+glue_database_name   = "clickhouse_iceberg_db"
+
+# ClickHouse Cloud Configuration
+# Set this to match your ClickHouse Cloud region
+clickhouse_cloud_region = "us-east-1"
+
+# External ID for IAM Role (change this to a random string for security)
+clickhouse_external_id = "my-unique-external-id-12345"
+
+# Glue Crawler Configuration
+enable_glue_crawler = true
+# Schedule: Every 5 minutes (modify as needed)
+# Format: cron(minutes hours day-of-month month day-of-week year)
+# Examples:
+#   cron(0 */1 * * ? *)    - Every hour
+#   cron(0 */2 * * ? *)    - Every 2 hours
+#   cron(0/5 * * * ? *)    - Every 5 minutes (default)
+crawler_schedule = "cron(0/5 * * * ? *)"
+
+# Tags (optional)
+tags = {
+  Project     = "ClickHouse-Glue-Integration"
+  ManagedBy   = "Terraform"
+  Environment = "Demo"
+}
