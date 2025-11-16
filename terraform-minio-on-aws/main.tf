@@ -9,11 +9,14 @@ terraform {
 }
 
 provider "aws" {
-  region = coalesce(var.aws_region, "us-east-1")
+  # Region priority:
+  # 1. var.aws_region (from terraform.tfvars)
+  # 2. AWS_REGION or AWS_DEFAULT_REGION environment variable (automatically detected)
+  # 3. Defaults to ap-northeast-2 (Seoul) if nothing is set
+  region = var.aws_region != null ? var.aws_region : null
+
   # Authentication uses environment variables:
   # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
-  # Region uses environment variables:
-  # AWS_REGION or AWS_DEFAULT_REGION (falls back to us-east-1 if not set)
 }
 
 # Get latest Amazon Linux 2023 AMI

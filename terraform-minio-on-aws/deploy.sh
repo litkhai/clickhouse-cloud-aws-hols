@@ -139,21 +139,21 @@ if [ "$AWS_CONFIGURED" = false ]; then
     esac
 fi
 
-# Check AWS region
-if [ -z "$AWS_REGION" ] && [ -z "$AWS_DEFAULT_REGION" ]; then
-    if command_exists aws; then
-        CONFIGURED_REGION=$(aws configure get region 2>/dev/null || echo "")
-        if [ -n "$CONFIGURED_REGION" ]; then
-            print_success "AWS Region from config: $CONFIGURED_REGION"
-        else
-            print_warning "AWS_REGION not set. Will use us-east-1 as default"
-        fi
-    else
-        print_warning "AWS_REGION not set. Will use us-east-1 as default"
-    fi
+# Determine deployment region
+DEPLOY_REGION=""
+if [ -n "$AWS_REGION" ]; then
+    DEPLOY_REGION="$AWS_REGION"
+elif [ -n "$AWS_DEFAULT_REGION" ]; then
+    DEPLOY_REGION="$AWS_DEFAULT_REGION"
+elif command_exists aws; then
+    DEPLOY_REGION=$(aws configure get region 2>/dev/null || echo "")
+fi
+
+if [ -n "$DEPLOY_REGION" ]; then
+    print_success "Deployment Region: $DEPLOY_REGION"
 else
-    REGION="${AWS_REGION:-$AWS_DEFAULT_REGION}"
-    print_success "AWS Region: $REGION"
+    print_warning "AWS region not configured. Terraform will use AWS provider defaults."
+    DEPLOY_REGION="default"
 fi
 
 # Display AWS identity
@@ -207,17 +207,23 @@ if [ "$KEY_PAIR_CONFIGURED" = false ]; then
 
     # List available key pairs if AWS CLI is available
     KEY_PAIRS=()
-    if command_exists aws && aws ec2 describe-key-pairs >/dev/null 2>&1; then
-        print_info "Fetching available key pairs from AWS..."
+    if command_exists aws && [ "$DEPLOY_REGION" != "default" ]; then
+        print_info "Fetching available key pairs from region: $DEPLOY_REGION..."
+
+        # Build AWS command with region
+        AWS_CMD="aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output text"
+        if [ -n "$DEPLOY_REGION" ] && [ "$DEPLOY_REGION" != "default" ]; then
+            AWS_CMD="$AWS_CMD --region $DEPLOY_REGION"
+        fi
 
         # Get key pairs as array (compatible with bash 3.x)
         while IFS= read -r line; do
             [ -n "$line" ] && KEY_PAIRS+=("$line")
-        done < <(aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output text 2>/dev/null | tr '\t' '\n')
+        done < <(eval $AWS_CMD 2>/dev/null | tr '\t' '\n')
 
         if [ ${#KEY_PAIRS[@]} -gt 0 ]; then
             echo ""
-            echo "Available key pairs in your AWS account:"
+            echo "Available key pairs in region $DEPLOY_REGION:"
             echo "=========================================="
             for i in "${!KEY_PAIRS[@]}"; do
                 printf "  %2d. %s\n" $((i+1)) "${KEY_PAIRS[$i]}"
@@ -247,13 +253,18 @@ if [ "$KEY_PAIR_CONFIGURED" = false ]; then
                 fi
 
                 # Verify key pair exists
-                if aws ec2 describe-key-pairs --key-names "$key_pair_name" >/dev/null 2>&1; then
-                    print_success "Key pair '$key_pair_name' verified"
+                VERIFY_CMD="aws ec2 describe-key-pairs --key-names \"$key_pair_name\""
+                if [ -n "$DEPLOY_REGION" ] && [ "$DEPLOY_REGION" != "default" ]; then
+                    VERIFY_CMD="$VERIFY_CMD --region $DEPLOY_REGION"
+                fi
+
+                if eval $VERIFY_CMD >/dev/null 2>&1; then
+                    print_success "Key pair '$key_pair_name' verified in region $DEPLOY_REGION"
                 else
-                    print_warning "Key pair '$key_pair_name' not found in AWS account"
+                    print_warning "Key pair '$key_pair_name' not found in region $DEPLOY_REGION"
                     read -p "Continue anyway? (yes/no): " continue_choice
                     if [ "$continue_choice" != "yes" ]; then
-                        print_info "Exiting. Please check your key pair name."
+                        print_info "Exiting. Please check your key pair name and region."
                         exit 0
                     fi
                 fi
