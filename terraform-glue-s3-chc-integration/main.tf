@@ -23,8 +23,9 @@ data "aws_region" "current" {}
 # ==================== S3 Bucket ====================
 
 resource "aws_s3_bucket" "iceberg_data" {
-  bucket = "${var.project_name}-${data.aws_caller_identity.current.account_id}"
-  tags   = var.tags
+  bucket        = "${var.project_name}-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true  # Allow deletion even if bucket contains objects
+  tags          = var.tags
 }
 
 resource "aws_s3_bucket_versioning" "iceberg_data" {
