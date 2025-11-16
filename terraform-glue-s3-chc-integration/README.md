@@ -57,12 +57,12 @@ CREATE DATABASE glue_db
 ENGINE = DataLakeCatalog
 SETTINGS
     catalog_type = 'glue',
+ -- glue_database = 'clickhouse_iceberg_db', -- Not supported in ClickHouse 25.8
     region = 'ap-northeast-2',
-    glue_database = 'clickhouse_iceberg_db',
     aws_access_key_id = 'AKIA...',           -- Your actual credentials
     aws_secret_access_key = 'your-secret';    -- filled in by deploy.sh
 
--- List all tables
+-- List all tables (from default Glue database in the region)
 SHOW TABLES FROM glue_db;
 
 -- Query the Iceberg table
@@ -74,6 +74,8 @@ FROM glue_db.`sales_orders`
 GROUP BY category
 ORDER BY revenue DESC;
 ```
+
+**Note:** The `glue_database` parameter is not supported in ClickHouse 25.8. DataLakeCatalog will automatically discover all Glue databases in the specified region.
 
 ## Manual Setup (Alternative)
 
