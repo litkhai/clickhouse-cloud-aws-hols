@@ -210,8 +210,10 @@ if [ "$KEY_PAIR_CONFIGURED" = false ]; then
     if command_exists aws && aws ec2 describe-key-pairs >/dev/null 2>&1; then
         print_info "Fetching available key pairs from AWS..."
 
-        # Get key pairs as array
-        mapfile -t KEY_PAIRS < <(aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output text 2>/dev/null | tr '\t' '\n')
+        # Get key pairs as array (compatible with bash 3.x)
+        while IFS= read -r line; do
+            [ -n "$line" ] && KEY_PAIRS+=("$line")
+        done < <(aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output text 2>/dev/null | tr '\t' '\n')
 
         if [ ${#KEY_PAIRS[@]} -gt 0 ]; then
             echo ""
