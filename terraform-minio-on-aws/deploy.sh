@@ -45,78 +45,254 @@ if ! command_exists terraform; then
     exit 1
 fi
 
+print_success "Terraform found: $(terraform version | head -n 1)"
+
 if ! command_exists aws; then
-    print_warning "AWS CLI is not installed. You'll need to set AWS credentials via environment variables."
+    print_warning "AWS CLI is not installed"
+    print_info "You can install it from: https://aws.amazon.com/cli/"
+    echo ""
 else
     print_success "AWS CLI found"
 fi
 
-print_success "Terraform found: $(terraform version | head -n 1)"
+echo ""
+echo "=========================================="
+echo "  Step 1: AWS Credentials Configuration"
+echo "=========================================="
+echo ""
 
 # Check AWS credentials
 print_info "Checking AWS credentials..."
 
-if [ -z "$AWS_ACCESS_KEY_ID" ] && [ -z "$AWS_PROFILE" ]; then
-    print_warning "AWS credentials not found in environment variables"
-    print_info "Checking AWS CLI configuration..."
+AWS_CONFIGURED=false
 
-    if command_exists aws && aws sts get-caller-identity >/dev/null 2>&1; then
-        print_success "AWS credentials found via AWS CLI configuration"
-    else
-        print_error "No AWS credentials found. Please configure AWS credentials:"
-        echo ""
-        echo "  Option 1: Using environment variables"
-        echo "    export AWS_ACCESS_KEY_ID=\"your-access-key\""
-        echo "    export AWS_SECRET_ACCESS_KEY=\"your-secret-key\""
-        echo "    export AWS_REGION=\"us-east-1\"  # optional"
-        echo ""
-        echo "  Option 2: Using AWS CLI"
-        echo "    aws configure"
-        echo ""
-        exit 1
-    fi
-else
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
     print_success "AWS credentials found in environment variables"
+    AWS_CONFIGURED=true
+elif command_exists aws && aws sts get-caller-identity >/dev/null 2>&1; then
+    print_success "AWS credentials found via AWS CLI configuration"
+    AWS_CONFIGURED=true
+else
+    print_warning "No AWS credentials found"
+fi
+
+# If not configured, prompt user
+if [ "$AWS_CONFIGURED" = false ]; then
+    echo ""
+    print_error "AWS credentials are not configured!"
+    echo ""
+    echo "Please choose an option to configure AWS credentials:"
+    echo ""
+    echo "  1. Run 'aws configure' now (recommended)"
+    echo "  2. Set environment variables manually"
+    echo "  3. Exit and configure later"
+    echo ""
+    read -p "Enter your choice (1-3): " aws_choice
+
+    case $aws_choice in
+        1)
+            if ! command_exists aws; then
+                print_error "AWS CLI is not installed. Please install it first."
+                exit 1
+            fi
+
+            echo ""
+            print_info "Starting AWS configuration..."
+            echo ""
+            echo "You will need:"
+            echo "  - AWS Access Key ID"
+            echo "  - AWS Secret Access Key"
+            echo "  - Default region (e.g., us-east-1)"
+            echo "  - Output format (just press Enter for default)"
+            echo ""
+
+            aws configure
+
+            # Verify configuration
+            if aws sts get-caller-identity >/dev/null 2>&1; then
+                print_success "AWS credentials configured successfully!"
+                AWS_CONFIGURED=true
+            else
+                print_error "AWS configuration failed. Please try again."
+                exit 1
+            fi
+            ;;
+        2)
+            echo ""
+            print_info "Please set the following environment variables in your shell:"
+            echo ""
+            echo "  export AWS_ACCESS_KEY_ID=\"your-access-key\""
+            echo "  export AWS_SECRET_ACCESS_KEY=\"your-secret-key\""
+            echo "  export AWS_REGION=\"us-east-1\"  # optional"
+            echo ""
+            print_warning "After setting environment variables, please run this script again."
+            exit 0
+            ;;
+        3)
+            print_info "Exiting. Please configure AWS credentials and run again."
+            exit 0
+            ;;
+        *)
+            print_error "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
 fi
 
 # Check AWS region
 if [ -z "$AWS_REGION" ] && [ -z "$AWS_DEFAULT_REGION" ]; then
-    print_warning "AWS_REGION not set. Will use us-east-1 as default"
+    if command_exists aws; then
+        CONFIGURED_REGION=$(aws configure get region 2>/dev/null || echo "")
+        if [ -n "$CONFIGURED_REGION" ]; then
+            print_success "AWS Region from config: $CONFIGURED_REGION"
+        else
+            print_warning "AWS_REGION not set. Will use us-east-1 as default"
+        fi
+    else
+        print_warning "AWS_REGION not set. Will use us-east-1 as default"
+    fi
 else
     REGION="${AWS_REGION:-$AWS_DEFAULT_REGION}"
     print_success "AWS Region: $REGION"
 fi
 
+# Display AWS identity
+echo ""
+print_info "Verifying AWS identity..."
+if command_exists aws && aws sts get-caller-identity >/dev/null 2>&1; then
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
+    USER_ARN=$(aws sts get-caller-identity --query Arn --output text 2>/dev/null || echo "unknown")
+    echo "  Account ID: $ACCOUNT_ID"
+    echo "  User/Role: $USER_ARN"
+    print_success "AWS identity verified"
+else
+    print_warning "Could not verify AWS identity, but will proceed with deployment"
+fi
+
+echo ""
+echo "=========================================="
+echo "  Step 2: EC2 Key Pair Configuration"
+echo "=========================================="
+echo ""
+
 # Check if terraform.tfvars exists
 if [ ! -f "terraform.tfvars" ]; then
-    print_warning "terraform.tfvars not found"
-    print_info "Creating terraform.tfvars from example..."
+    print_info "terraform.tfvars not found, creating from template..."
 
     if [ -f "terraform.tfvars.example" ]; then
         cp terraform.tfvars.example terraform.tfvars
         print_success "Created terraform.tfvars"
-        echo ""
-        print_warning "IMPORTANT: Please edit terraform.tfvars and set the following:"
-        echo "  - key_pair_name: Your EC2 key pair name"
-        echo "  - instance_type: EC2 instance type (default: c5.xlarge)"
-        echo "  - ebs_volume_size: EBS volume size in GB (default: 250)"
-        echo "  - minio_root_user: MinIO username (default: admin)"
-        echo "  - minio_root_password: MinIO password (default: admin)"
-        echo ""
-        read -p "Press Enter after editing terraform.tfvars to continue, or Ctrl+C to exit..."
     else
         print_error "terraform.tfvars.example not found"
         exit 1
     fi
-else
-    print_success "Found terraform.tfvars"
 fi
 
-# Check key_pair_name (optional but recommended)
-if grep -q "YOUR_KEY_PAIR_NAME" terraform.tfvars 2>/dev/null || grep -q "# key_pair_name" terraform.tfvars 2>/dev/null; then
-    print_warning "key_pair_name is not configured in terraform.tfvars"
-    print_warning "SSH access to the instance will not be available"
+# Check for key pair configuration
+KEY_PAIR_CONFIGURED=false
+
+if grep -q "^key_pair_name\s*=\s*\".\+\"" terraform.tfvars 2>/dev/null; then
+    CONFIGURED_KEY=$(grep "^key_pair_name" terraform.tfvars | cut -d'"' -f2)
+    if [ "$CONFIGURED_KEY" != "YOUR_KEY_PAIR_NAME" ] && [ -n "$CONFIGURED_KEY" ]; then
+        print_success "EC2 Key Pair already configured: $CONFIGURED_KEY"
+        KEY_PAIR_CONFIGURED=true
+    fi
+fi
+
+if [ "$KEY_PAIR_CONFIGURED" = false ]; then
+    print_warning "EC2 Key Pair is not configured"
     echo ""
+    echo "SSH Key Pair allows you to access the EC2 instance via SSH."
+    echo ""
+
+    # List available key pairs if AWS CLI is available
+    if command_exists aws && aws ec2 describe-key-pairs >/dev/null 2>&1; then
+        echo "Available key pairs in your AWS account:"
+        aws ec2 describe-key-pairs --query 'KeyPairs[*].KeyName' --output table 2>/dev/null || echo "  (Could not list key pairs)"
+        echo ""
+    fi
+
+    echo "Options:"
+    echo "  1. Enter an existing EC2 key pair name"
+    echo "  2. Skip SSH configuration (MinIO will still be accessible via web)"
+    echo ""
+    read -p "Enter your choice (1-2): " key_choice
+
+    case $key_choice in
+        1)
+            echo ""
+            read -p "Enter your EC2 key pair name: " key_pair_name
+
+            if [ -z "$key_pair_name" ]; then
+                print_error "Key pair name cannot be empty"
+                exit 1
+            fi
+
+            # Verify key pair exists (if AWS CLI is available)
+            if command_exists aws; then
+                if aws ec2 describe-key-pairs --key-names "$key_pair_name" >/dev/null 2>&1; then
+                    print_success "Key pair '$key_pair_name' verified"
+                else
+                    print_warning "Key pair '$key_pair_name' not found in AWS account"
+                    read -p "Continue anyway? (yes/no): " continue_choice
+                    if [ "$continue_choice" != "yes" ]; then
+                        print_info "Exiting. Please check your key pair name."
+                        exit 0
+                    fi
+                fi
+            fi
+
+            # Update terraform.tfvars
+            if grep -q "^# key_pair_name" terraform.tfvars; then
+                sed -i.bak "s|^# key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+            elif grep -q "^key_pair_name" terraform.tfvars; then
+                sed -i.bak "s|^key_pair_name.*|key_pair_name = \"$key_pair_name\"|" terraform.tfvars
+            else
+                echo "key_pair_name = \"$key_pair_name\"" >> terraform.tfvars
+            fi
+            rm -f terraform.tfvars.bak
+
+            print_success "Key pair configured: $key_pair_name"
+            ;;
+        2)
+            print_warning "Skipping SSH key pair configuration"
+            print_info "You will not be able to SSH into the instance"
+            print_info "MinIO will still be accessible via web console and API"
+            echo ""
+            ;;
+        *)
+            print_error "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
+fi
+
+echo ""
+echo "=========================================="
+echo "  Step 3: Deployment Configuration"
+echo "=========================================="
+echo ""
+
+print_info "Current configuration:"
+echo ""
+
+# Show instance configuration
+INSTANCE_TYPE=$(grep "^instance_type" terraform.tfvars | cut -d'"' -f2 2>/dev/null || echo "c5.xlarge")
+EBS_SIZE=$(grep "^ebs_volume_size" terraform.tfvars | awk '{print $3}' 2>/dev/null || echo "250")
+MINIO_USER=$(grep "^minio_root_user" terraform.tfvars | cut -d'"' -f2 2>/dev/null || echo "admin")
+
+echo "  Instance Type: $INSTANCE_TYPE"
+echo "  EBS Volume: ${EBS_SIZE}GB"
+echo "  MinIO User: $MINIO_USER"
+echo "  Network Access: Public (0.0.0.0/0)"
+echo ""
+
+read -p "Proceed with this configuration? (yes/no): " proceed_choice
+
+if [ "$proceed_choice" != "yes" ]; then
+    print_info "You can edit terraform.tfvars to customize the configuration"
+    print_info "Run this script again when ready"
+    exit 0
 fi
 
 echo ""
@@ -146,7 +322,11 @@ fi
 echo ""
 
 # Confirm before apply
-print_warning "Review the plan above. The following resources will be created:"
+print_warning "=========================================="
+print_warning "           READY TO DEPLOY"
+print_warning "=========================================="
+echo ""
+print_info "Resources to be created:"
 echo "  - EC2 Instance (MinIO server)"
 echo "  - Security Group (ports 9000, 9001, 22)"
 echo "  - Elastic IP (if enabled)"
@@ -201,7 +381,7 @@ echo ""
 
 # Get credentials (sensitive output)
 print_info "MinIO Credentials:"
-terraform output -json minio_credentials 2>/dev/null | grep -E '"username"|"password"' | sed 's/^/  /'
+terraform output -json minio_credentials 2>/dev/null | grep -E '"username"|"password"' | sed 's/^/  /' || echo "  (credentials not available)"
 
 echo ""
 echo "=========================================="
@@ -210,11 +390,12 @@ echo "=========================================="
 echo ""
 echo "1. MinIO installation may take 2-3 minutes to complete"
 echo "2. Access the MinIO Console at: $CONSOLE_URL"
-echo "3. Default credentials: admin / admin (change in production!)"
+echo "3. Default credentials: admin / admin"
+echo "   ⚠️  IMPORTANT: Change credentials for production use!"
 echo "4. Security group allows access from 0.0.0.0/0 (public)"
 echo "5. For production, consider:"
 echo "   - Change MinIO credentials"
-echo "   - Restrict allowed_cidr_blocks"
+echo "   - Restrict allowed_cidr_blocks to specific IPs"
 echo "   - Enable HTTPS/TLS"
 echo ""
 print_success "Deployment script completed!"
