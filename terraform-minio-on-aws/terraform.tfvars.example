@@ -1,0 +1,26 @@
+# AWS Configuration
+# Note: AWS credentials should be set via environment variables:
+#   export AWS_ACCESS_KEY_ID="your-access-key"
+#   export AWS_SECRET_ACCESS_KEY="your-secret-key"
+#   export AWS_SESSION_TOKEN="your-session-token"  # Optional, for temporary credentials
+#
+# AWS Region (optional):
+#   If not specified here, uses AWS_REGION or AWS_DEFAULT_REGION environment variable
+#   If no environment variable is set, defaults to us-east-1
+# aws_region = "us-west-2"
+
+# EC2 Configuration
+instance_name   = "minio-server"
+instance_type   = "c5.xlarge"
+ebs_volume_size = 250
+key_pair_name   = "YOUR_KEY_PAIR_NAME"
+
+# Network Configuration
+# Replace with your IP address for better security (e.g., ["1.2.3.4/32"])
+allowed_cidr_blocks = ["0.0.0.0/0"]
+use_elastic_ip      = true
+
+# MinIO Configuration
+minio_root_user     = "minioadmin"
+minio_root_password = "minioadmin123"
+minio_data_dir      = "/mnt/data"
