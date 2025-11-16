@@ -83,9 +83,10 @@ output "clickhouse_integration_info" {
 
   Next Steps:
   -----------
-  1. Upload sample data: ./scripts/upload-sample-data.sh
-  2. Run Glue crawlers to populate catalog
-  3. In ClickHouse Cloud, configure IAM Role integration:
+  1. Upload sample data & run crawlers: ./scripts/upload-sample-data.sh
+     (This automatically creates sample data, uploads to S3, and runs all crawlers)
+
+  2. In ClickHouse Cloud, configure IAM Role integration:
      - Go to Settings > Integrations > AWS
      - Add IAM Role ARN: ${aws_iam_role.clickhouse_role.arn}
      - Add External ID from: terraform output -raw clickhouse_external_id

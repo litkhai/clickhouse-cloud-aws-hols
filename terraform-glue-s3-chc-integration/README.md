@@ -79,34 +79,24 @@ terraform plan
 terraform apply
 ```
 
-### 4. Quick Setup: Upload Data & Run Crawlers (Recommended)
+### 4. Upload Sample Data & Run Crawlers
 
 ```bash
-# One-command setup: creates sample data, uploads to S3, and runs crawlers
-./scripts/quick-setup.sh
+# One command: creates sample data, uploads to S3, and runs crawlers automatically
+./scripts/upload-sample-data.sh
 ```
 
 This script will:
-- ✅ Generate sample CSV data files locally
+- ✅ Generate sample CSV data files locally (no Python dependencies needed)
 - ✅ Upload files to S3 (CSV, Parquet, Iceberg)
 - ✅ Start all Glue crawlers automatically
 - ✅ Wait for crawlers to complete (2-5 minutes)
-- ✅ Display created tables in Glue Catalog
+- ✅ Verify and display created tables in Glue Catalog
 
 **Created Tables:**
 - `sales_data_csv` - Transaction data with 10 sample records
 - `users_csv` - User demographics (5 users)
 - `parquet` - Product catalog data
-
-**Alternative: Manual Steps**
-
-```bash
-# Generate and upload sample data
-./scripts/upload-sample-data.sh
-
-# Then manually start crawlers
-aws glue start-crawler --name <crawler-name>
-```
 
 ### 5. Get ClickHouse Integration Info
 
