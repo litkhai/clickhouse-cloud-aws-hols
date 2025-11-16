@@ -1,16 +1,4 @@
-# AWS Credentials and Region
-variable "aws_access_key_id" {
-  description = "AWS Access Key ID (long-term credentials required, must start with AKIA)"
-  type        = string
-  sensitive   = true
-}
-
-variable "aws_secret_access_key" {
-  description = "AWS Secret Access Key"
-  type        = string
-  sensitive   = true
-}
-
+# AWS Region
 variable "aws_region" {
   description = "AWS region to deploy resources (must match ClickHouse Cloud region)"
   type        = string

@@ -1,7 +1,9 @@
-# AWS Credentials (Required)
-aws_access_key_id     = "AKIA..."           # Your AWS Access Key ID (must be long-term, starting with AKIA)
-aws_secret_access_key = "your-secret-key"   # Your AWS Secret Access Key
-aws_region            = "ap-northeast-2"    # AWS region (must match ClickHouse Cloud region)
+# AWS Region
+# Note: AWS credentials (access key, secret key) are provided via environment variables
+# Set them before running: export AWS_ACCESS_KEY_ID=... export AWS_SECRET_ACCESS_KEY=...
+# Or use the deploy.sh script which will prompt for them
+
+aws_region = "ap-northeast-2"  # Must match your ClickHouse Cloud region
 
 # Optional Configuration
 # project_name          = "chc-glue-integration"

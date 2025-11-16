@@ -25,31 +25,32 @@ Simple Terraform setup to integrate ClickHouse Cloud with AWS Glue Catalog using
 
 ## Quick Start
 
-### 1. Configure Your AWS Credentials
-
-Create a `terraform.tfvars` file:
-
-```hcl
-aws_access_key_id     = "AKIA..."
-aws_secret_access_key = "your-secret-key"
-aws_region            = "ap-northeast-2"  # Must match your ClickHouse Cloud region
-```
-
-### 2. Deploy Infrastructure
+### 1. Run Deployment Script
 
 ```bash
 ./deploy.sh
 ```
 
-This will:
-- Deploy all AWS infrastructure
-- Create and upload sample Iceberg table (`sales_orders`)
-- Run Glue Crawler to register the table
-- Display ClickHouse connection SQL
+The script will:
+1. **Prompt for AWS credentials** (stored only in environment variables, not in files)
+   - AWS Access Key ID (must start with AKIA for long-term credentials)
+   - AWS Secret Access Key
+   - AWS Region (default: ap-northeast-2)
 
-### 3. Use in ClickHouse Cloud
+2. **Deploy all AWS infrastructure**
+   - S3 bucket with encryption and versioning
+   - AWS Glue Database and Crawler
+   - IAM Role for Glue Crawler (if permissions allow)
 
-Copy the SQL output and run in your ClickHouse Cloud console:
+3. **Create and upload sample Iceberg table** (`sales_orders`)
+
+4. **Run Glue Crawler** to register the table
+
+5. **Display ClickHouse connection SQL** with credentials embedded
+
+### 2. Use in ClickHouse Cloud
+
+Copy the SQL output from deploy.sh and run it in your ClickHouse Cloud console. The SQL will already have your credentials embedded:
 
 ```sql
 CREATE DATABASE glue_db
@@ -58,8 +59,8 @@ SETTINGS
     catalog_type = 'glue',
     region = 'ap-northeast-2',
     glue_database = 'clickhouse_iceberg_db',
-    aws_access_key_id = 'AKIA...',
-    aws_secret_access_key = 'your-secret-key';
+    aws_access_key_id = 'AKIA...',           -- Your actual credentials
+    aws_secret_access_key = 'your-secret';    -- filled in by deploy.sh
 
 -- List all tables
 SHOW TABLES FROM glue_db;
@@ -79,22 +80,27 @@ ORDER BY revenue DESC;
 If you prefer step-by-step control:
 
 ```bash
-# 1. Initialize Terraform
+# 1. Set AWS credentials as environment variables
+export AWS_ACCESS_KEY_ID="AKIA..."
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_REGION="ap-northeast-2"
+
+# 2. Initialize Terraform
 terraform init
 
-# 2. Deploy infrastructure
+# 3. Deploy infrastructure
 terraform apply
 
-# 3. Create Iceberg table
+# 4. Create Iceberg table
 python3 ./scripts/create-iceberg-table.py
 
-# 4. Run Glue Crawler
+# 5. Run Glue Crawler
 aws glue start-crawler --name chc-glue-integration-iceberg-crawler --region ap-northeast-2
 
-# 5. Wait ~2 minutes, then check tables
+# 6. Wait ~2 minutes, then check tables
 aws glue get-tables --database-name clickhouse_iceberg_db --region ap-northeast-2
 
-# 6. Get connection info
+# 7. Get connection info (credentials will show as $AWS_ACCESS_KEY_ID placeholders)
 terraform output clickhouse_connection_info
 ```
 
@@ -110,17 +116,17 @@ terraform output clickhouse_connection_info
 
 ## Configuration
 
-Edit [variables.tf](variables.tf) or create `terraform.tfvars`:
+AWS credentials are provided via environment variables (not stored in files):
+- `AWS_ACCESS_KEY_ID` - Your AWS access key (must start with AKIA for long-term)
+- `AWS_SECRET_ACCESS_KEY` - Your AWS secret access key
+- `AWS_REGION` - AWS region (default: ap-northeast-2)
+
+Optional settings in `terraform.tfvars`:
 
 ```hcl
-# Required
-aws_access_key_id     = "AKIA..."           # Your AWS access key (long-term)
-aws_secret_access_key = "your-secret-key"   # Your AWS secret key
-aws_region            = "ap-northeast-2"    # AWS region
-
-# Optional
-project_name          = "chc-glue-integration"     # Resource name prefix
-glue_database_name    = "clickhouse_iceberg_db"    # Glue database name
+aws_region         = "ap-northeast-2"           # AWS region
+project_name       = "chc-glue-integration"     # Resource name prefix
+glue_database_name = "clickhouse_iceberg_db"    # Glue database name
 ```
 
 ## Architecture

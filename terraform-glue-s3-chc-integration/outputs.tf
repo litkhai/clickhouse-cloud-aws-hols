@@ -24,8 +24,8 @@ SETTINGS
     catalog_type = 'glue',
     region = '${data.aws_region.current.name}',
     glue_database = '${aws_glue_catalog_database.iceberg_db.name}',
-    aws_access_key_id = '${var.aws_access_key_id}',
-    aws_secret_access_key = '${var.aws_secret_access_key}';
+    aws_access_key_id = '$AWS_ACCESS_KEY_ID',
+    aws_secret_access_key = '$AWS_SECRET_ACCESS_KEY';
 
 -- List all tables
 SHOW TABLES FROM glue_db;
@@ -33,6 +33,7 @@ SHOW TABLES FROM glue_db;
 -- Query Iceberg table
 SELECT * FROM glue_db.`sales_orders` LIMIT 10;
 
+Note: Replace $AWS_ACCESS_KEY_ID and $AWS_SECRET_ACCESS_KEY with your actual credentials
 ========================================
 EOT
 }

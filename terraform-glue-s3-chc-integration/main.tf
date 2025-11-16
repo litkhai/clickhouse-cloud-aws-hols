@@ -8,10 +8,12 @@ terraform {
   }
 }
 
+# Provider uses environment variables:
+# - AWS_ACCESS_KEY_ID
+# - AWS_SECRET_ACCESS_KEY
+# - AWS_REGION (or var.aws_region as fallback)
 provider "aws" {
-  region     = var.aws_region
-  access_key = var.aws_access_key_id
-  secret_key = var.aws_secret_access_key
+  region = var.aws_region
 }
 
 # Get current AWS account info
@@ -57,6 +59,8 @@ resource "aws_s3_object" "iceberg_folder" {
 }
 
 # ==================== IAM Role for Glue Crawler ====================
+# Note: If role creation fails due to AWS SCP, you must use an existing role
+# or have your administrator create one with the AWSGlueServiceRole policy
 
 resource "aws_iam_role" "glue_crawler_role" {
   name = "${var.project_name}-glue-crawler-role"

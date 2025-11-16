@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy ClickHouse Glue Catalog Integration
-# This script: deploys infrastructure → creates sample data → runs crawler → shows connection info
+# This script: prompts for AWS credentials → deploys infrastructure → creates sample data → runs crawler
 
 set -e
 
@@ -19,8 +19,37 @@ echo "ClickHouse Glue Catalog - Deploy"
 echo "=========================================="
 echo ""
 
-# ==================== Step 1: Check Prerequisites ====================
-echo -e "${BLUE}Step 1/4: Checking prerequisites...${NC}"
+# ==================== Step 1: Get AWS Credentials ====================
+echo -e "${BLUE}Step 1/5: AWS Credentials Setup${NC}"
+echo ""
+
+# Check if credentials are already in environment
+if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+    echo "Please enter your AWS credentials:"
+    echo ""
+
+    read -p "AWS Access Key ID (AKIA...): " AWS_ACCESS_KEY_ID
+    read -sp "AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
+    echo ""
+    read -p "AWS Region [ap-northeast-2]: " AWS_REGION
+    AWS_REGION=${AWS_REGION:-ap-northeast-2}
+
+    # Export for this session
+    export AWS_ACCESS_KEY_ID
+    export AWS_SECRET_ACCESS_KEY
+    export AWS_REGION
+
+    echo ""
+    echo -e "${GREEN}✓ Credentials set for this session${NC}"
+else
+    echo -e "${GREEN}✓ Using existing environment credentials${NC}"
+    AWS_REGION=${AWS_REGION:-ap-northeast-2}
+fi
+
+echo ""
+
+# ==================== Step 2: Check Prerequisites ====================
+echo -e "${BLUE}Step 2/5: Checking prerequisites...${NC}"
 
 if ! command -v terraform &> /dev/null; then
     echo -e "${RED}Error: Terraform not found. Please install: https://www.terraform.io/downloads${NC}"
@@ -40,8 +69,8 @@ fi
 echo -e "${GREEN}✓ All prerequisites met${NC}"
 echo ""
 
-# ==================== Step 2: Deploy Infrastructure ====================
-echo -e "${BLUE}Step 2/4: Deploying AWS infrastructure (S3 + Glue)...${NC}"
+# ==================== Step 3: Deploy Infrastructure ====================
+echo -e "${BLUE}Step 3/5: Deploying AWS infrastructure (S3 + Glue)...${NC}"
 
 if [ ! -f "terraform.tfstate" ]; then
     terraform init
@@ -51,14 +80,16 @@ terraform apply -auto-approve
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Terraform deployment failed${NC}"
+    echo -e "${YELLOW}Note: If IAM role creation failed due to AWS SCP restrictions,${NC}"
+    echo -e "${YELLOW}      you may need to use an existing role or contact your administrator.${NC}"
     exit 1
 fi
 
 echo -e "${GREEN}✓ Infrastructure deployed${NC}"
 echo ""
 
-# ==================== Step 3: Create and Upload Iceberg Data ====================
-echo -e "${BLUE}Step 3/4: Creating and uploading Iceberg table...${NC}"
+# ==================== Step 4: Create and Upload Iceberg Data ====================
+echo -e "${BLUE}Step 4/5: Creating and uploading Iceberg table...${NC}"
 
 # Install required Python packages
 pip3 install -q pyiceberg pandas pyarrow
@@ -74,8 +105,8 @@ fi
 echo -e "${GREEN}✓ Iceberg table created and uploaded to S3${NC}"
 echo ""
 
-# ==================== Step 4: Run Glue Crawler ====================
-echo -e "${BLUE}Step 4/4: Running Glue Crawler...${NC}"
+# ==================== Step 5: Run Glue Crawler ====================
+echo -e "${BLUE}Step 5/5: Running Glue Crawler...${NC}"
 
 CRAWLER_NAME=$(terraform output -raw glue_crawler_name)
 AWS_REGION=$(terraform output -raw aws_region)
@@ -120,7 +151,12 @@ echo "Deployment Complete!"
 echo "=========================================="
 echo ""
 
-terraform output clickhouse_connection_info
+# Get the connection info and replace placeholders with actual values
+CONNECTION_INFO=$(terraform output -raw clickhouse_connection_info)
+CONNECTION_INFO=${CONNECTION_INFO//\$AWS_ACCESS_KEY_ID/$AWS_ACCESS_KEY_ID}
+CONNECTION_INFO=${CONNECTION_INFO//\$AWS_SECRET_ACCESS_KEY/$AWS_SECRET_ACCESS_KEY}
+
+echo "$CONNECTION_INFO"
 
 echo ""
 echo -e "${GREEN}Next Steps:${NC}"
@@ -128,6 +164,8 @@ echo "  1. Copy the SQL commands above"
 echo "  2. Paste them into your ClickHouse Cloud SQL console"
 echo "  3. Start querying your Iceberg data!"
 echo ""
-echo -e "${YELLOW}Note:${NC} If AWS SCP restricts IAM operations, some features may be limited."
-echo "      The current setup uses your provided AWS credentials directly."
+echo -e "${YELLOW}Important:${NC}"
+echo "  - AWS credentials are stored in environment variables for this session only"
+echo "  - They are NOT saved in any Terraform files"
+echo "  - If AWS SCP restricts IAM operations, some features may be limited"
 echo ""
