@@ -129,7 +129,7 @@ resource "aws_glue_crawler" "iceberg_crawler" {
 
   iceberg_target {
     paths                   = ["s3://${aws_s3_bucket.iceberg_data.bucket}/iceberg/"]
-    maximum_traversal_depth = 3
+    maximum_traversal_depth = 5
   }
 
   schema_change_policy {

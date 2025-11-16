@@ -209,7 +209,6 @@ def main():
     print(f"   SETTINGS")
     print(f"       catalog_type = 'glue',")
     print(f"       region = '{aws_region}',")
-    print(f"       glue_database = 'clickhouse_iceberg_db',")
     print(f"       aws_access_key_id = '$AWS_ACCESS_KEY_ID',")
     print(f"       aws_secret_access_key = '$AWS_SECRET_ACCESS_KEY';")
     print()

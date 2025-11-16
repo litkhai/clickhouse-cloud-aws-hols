@@ -171,16 +171,33 @@ INTERVAL=10
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
     STATUS=$(aws glue get-crawler --name "$CRAWLER_NAME" --region "$CRAWLER_REGION" --query 'Crawler.State' --output text)
+    LAST_CRAWL=$(aws glue get-crawler --name "$CRAWLER_NAME" --region "$CRAWLER_REGION" --query 'Crawler.LastCrawl' --output json 2>/dev/null || echo '{}')
 
     if [ "$STATUS" == "READY" ]; then
-        echo -e "${GREEN}✓ Crawler completed successfully${NC}"
+        echo -e "${GREEN}✓ Crawler completed (status: READY)${NC}"
+
+        # Check last crawl result
+        CRAWL_STATUS=$(echo "$LAST_CRAWL" | grep -o '"Status": *"[^"]*"' | cut -d'"' -f4)
+        if [ "$CRAWL_STATUS" == "SUCCEEDED" ]; then
+            echo -e "${GREEN}✓ Last crawl succeeded${NC}"
+        elif [ "$CRAWL_STATUS" == "FAILED" ]; then
+            echo -e "${RED}✗ Last crawl failed${NC}"
+            ERROR_MSG=$(echo "$LAST_CRAWL" | grep -o '"ErrorMessage": *"[^"]*"' | cut -d'"' -f4)
+            if [ -n "$ERROR_MSG" ]; then
+                echo -e "${RED}  Error: $ERROR_MSG${NC}"
+            fi
+        fi
         break
     elif [ "$STATUS" == "RUNNING" ]; then
         echo -e "  Crawler status: RUNNING... (${ELAPSED}s elapsed)"
         sleep $INTERVAL
         ELAPSED=$((ELAPSED + INTERVAL))
+    elif [ "$STATUS" == "STOPPING" ]; then
+        echo -e "  Crawler status: STOPPING... (${ELAPSED}s elapsed)"
+        sleep $INTERVAL
+        ELAPSED=$((ELAPSED + INTERVAL))
     else
-        echo -e "${YELLOW}Warning: Crawler status: $STATUS${NC}"
+        echo -e "${YELLOW}  Crawler status: $STATUS (${ELAPSED}s elapsed)${NC}"
         sleep $INTERVAL
         ELAPSED=$((ELAPSED + INTERVAL))
     fi
