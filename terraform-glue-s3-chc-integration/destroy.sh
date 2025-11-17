@@ -11,11 +11,32 @@ cd "$SCRIPT_DIR"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo "=========================================="
 echo "ClickHouse Glue Catalog - Destroy"
 echo "=========================================="
+echo ""
+
+# Check AWS credentials
+echo "Checking AWS credentials..."
+if ! aws sts get-caller-identity >/dev/null 2>&1; then
+    echo -e "${RED}✗ AWS credentials are invalid or expired${NC}"
+    echo ""
+    echo "Please ensure valid AWS credentials are configured:"
+    echo "  1. Run 'aws configure' to set credentials, OR"
+    echo "  2. Export valid environment variables:"
+    echo "     export AWS_ACCESS_KEY_ID=\"your-key\""
+    echo "     export AWS_SECRET_ACCESS_KEY=\"your-secret\""
+    echo ""
+    echo "If you have environment variables set, try unsetting them:"
+    echo "  unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN"
+    exit 1
+fi
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo -e "${GREEN}✓ Using AWS Account: $ACCOUNT_ID${NC}"
 echo ""
 
 # Check if terraform state exists
