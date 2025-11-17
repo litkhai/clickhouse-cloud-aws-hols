@@ -21,6 +21,20 @@ echo ""
 
 # Check AWS credentials
 echo "Checking AWS credentials..."
+
+# If environment variables are set, check if they're valid
+if [ -n "$AWS_ACCESS_KEY_ID" ] || [ -n "$AWS_SECRET_ACCESS_KEY" ] || [ -n "$AWS_SESSION_TOKEN" ]; then
+    echo "Detected AWS environment variables. Checking validity..."
+    if ! aws sts get-caller-identity >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ Environment variables are set but credentials are invalid/expired${NC}"
+        echo "  Clearing invalid environment variables and trying AWS CLI config..."
+        unset AWS_ACCESS_KEY_ID
+        unset AWS_SECRET_ACCESS_KEY
+        unset AWS_SESSION_TOKEN
+    fi
+fi
+
+# Final credential check
 if ! aws sts get-caller-identity >/dev/null 2>&1; then
     echo -e "${RED}✗ AWS credentials are invalid or expired${NC}"
     echo ""
@@ -29,9 +43,6 @@ if ! aws sts get-caller-identity >/dev/null 2>&1; then
     echo "  2. Export valid environment variables:"
     echo "     export AWS_ACCESS_KEY_ID=\"your-key\""
     echo "     export AWS_SECRET_ACCESS_KEY=\"your-secret\""
-    echo ""
-    echo "If you have environment variables set, try unsetting them:"
-    echo "  unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN"
     exit 1
 fi
 
