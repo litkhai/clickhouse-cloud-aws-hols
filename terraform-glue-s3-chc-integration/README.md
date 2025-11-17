@@ -2,6 +2,19 @@
 
 Simple Terraform setup to integrate ClickHouse Cloud with AWS Glue Catalog using Apache Iceberg tables.
 
+## ⚠️ Current Limitations (ClickHouse Cloud 25.8)
+
+**Known limitations in ClickHouse Cloud version 25.8:**
+- ❌ `glue_database` parameter not supported in DataLakeCatalog
+- ❌ IAM role-based authentication not supported (must use access keys)
+- ✅ DataLakeCatalog discovers all Glue databases in the region automatically
+
+**Future Updates:**
+Once ClickHouse Cloud updates to support these features, this setup will be enhanced with:
+- Specific Glue database selection
+- IAM role-based authentication support
+- Cross-account Glue catalog access
+
 ## What This Does
 
 1. Creates S3 bucket for Iceberg data storage
