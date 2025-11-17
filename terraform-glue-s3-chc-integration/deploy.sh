@@ -26,6 +26,7 @@ echo ""
 # Check if environment variables are already set
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
     echo "Found AWS credentials in environment variables"
+    echo "  Key ID prefix: ${AWS_ACCESS_KEY_ID:0:10}..."
     echo "Verifying credentials..."
 
     if aws sts get-caller-identity >/dev/null 2>&1; then
@@ -44,7 +45,31 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
         fi
     else
         echo -e "${RED}✗ Environment variables set but credentials are invalid${NC}"
-        exit 1
+        echo "  This usually means the exported credentials are incorrect or expired."
+        echo "  Falling back to AWS CLI configured credentials..."
+        echo ""
+
+        # Unset invalid environment variables and try AWS CLI config
+        unset AWS_ACCESS_KEY_ID
+        unset AWS_SECRET_ACCESS_KEY
+        unset AWS_SESSION_TOKEN
+
+        if aws sts get-caller-identity >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ Using AWS CLI configured credentials${NC}"
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            USER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+            echo "  Account: $ACCOUNT_ID"
+            echo "  User: $USER_ARN"
+
+            # Extract credentials from AWS CLI for Terraform
+            export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+            export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+            export AWS_REGION=$(aws configure get region || echo "ap-northeast-2")
+            echo "  Region: $AWS_REGION"
+        else
+            echo -e "${RED}✗ No valid AWS credentials found${NC}"
+            exit 1
+        fi
     fi
 # Try AWS CLI configured credentials
 elif aws sts get-caller-identity >/dev/null 2>&1; then
