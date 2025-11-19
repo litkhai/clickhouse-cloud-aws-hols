@@ -1,0 +1,303 @@
+#!/bin/bash
+set -e
+
+# Update system
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get upgrade -y
+
+# Install required packages
+apt-get install -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    software-properties-common \
+    openjdk-11-jdk
+
+# Install Docker
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Start and enable Docker
+systemctl start docker
+systemctl enable docker
+
+# Create directory for Confluent Platform
+mkdir -p /opt/confluent
+cd /opt/confluent
+
+# Create docker-compose.yml for Confluent Platform
+cat > docker-compose.yml <<'EOF'
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:${confluent_version}
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+
+  broker:
+    image: confluentinc/cp-kafka:${confluent_version}
+    hostname: broker
+    container_name: broker
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092,EXTERNAL://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:${confluent_version}
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - broker
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  connect:
+    image: confluentinc/cp-kafka-connect:${confluent_version}
+    hostname: connect
+    container_name: connect
+    depends_on:
+      - broker
+      - schema-registry
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: compose-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: docker-connect-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+      CONNECT_OFFSET_STORAGE_TOPIC: docker-connect-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: docker-connect-status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+      CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:${confluent_version}
+    hostname: control-center
+    container_name: control-center
+    depends_on:
+      - broker
+      - schema-registry
+      - connect
+      - ksqldb-server
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONTROL_CENTER_CONNECT_CONNECT-DEFAULT_CLUSTER: 'connect:8083'
+      CONTROL_CENTER_KSQL_KSQLDB1_URL: "http://ksqldb-server:8088"
+      CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL: "http://localhost:8088"
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      PORT: 9021
+
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server:${confluent_version}
+    hostname: ksqldb-server
+    container_name: ksqldb-server
+    depends_on:
+      - broker
+      - schema-registry
+    ports:
+      - "8088:8088"
+    environment:
+      KSQL_CONFIG_DIR: "/etc/ksql"
+      KSQL_BOOTSTRAP_SERVERS: "broker:29092"
+      KSQL_HOST_NAME: ksqldb-server
+      KSQL_LISTENERS: "http://0.0.0.0:8088"
+      KSQL_CACHE_MAX_BYTES_BUFFERING: 0
+      KSQL_KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      KSQL_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+      KSQL_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+
+  rest-proxy:
+    image: confluentinc/cp-kafka-rest:${confluent_version}
+    hostname: rest-proxy
+    container_name: rest-proxy
+    depends_on:
+      - broker
+      - schema-registry
+    ports:
+      - "8082:8082"
+    environment:
+      KAFKA_REST_HOST_NAME: rest-proxy
+      KAFKA_REST_BOOTSTRAP_SERVERS: 'broker:29092'
+      KAFKA_REST_LISTENERS: "http://0.0.0.0:8082"
+      KAFKA_REST_SCHEMA_REGISTRY_URL: 'http://schema-registry:8081'
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+EOF
+
+# Start Confluent Platform
+docker compose up -d
+
+# Wait for Kafka to be ready
+echo "Waiting for Kafka to be ready..."
+sleep 60
+
+# Create sample topic
+docker exec broker kafka-topics --create \
+  --bootstrap-server localhost:9092 \
+  --topic ${topic_name} \
+  --partitions 3 \
+  --replication-factor 1 \
+  --if-not-exists
+
+# Create data producer script
+cat > /opt/confluent/produce-data.sh <<'PRODUCER_EOF'
+#!/bin/bash
+
+TOPIC="${topic_name}"
+INTERVAL=${data_interval}
+
+echo "Starting data producer for topic: $TOPIC"
+echo "Producing data every $INTERVAL seconds"
+
+counter=1
+while true; do
+  timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  user_id=$((RANDOM % 1000 + 1))
+  event_type=("page_view" "click" "purchase" "signup" "logout")
+  event=$${event_type[$RANDOM % $${#event_type[@]}]}
+  value=$((RANDOM % 1000 + 1))
+
+  message=$(cat <<EOF
+{
+  "event_id": $counter,
+  "timestamp": "$timestamp",
+  "user_id": $user_id,
+  "event_type": "$event",
+  "value": $value,
+  "metadata": {
+    "source": "web",
+    "version": "1.0"
+  }
+}
+EOF
+)
+
+  echo "$message" | docker exec -i broker kafka-console-producer \
+    --broker-list localhost:9092 \
+    --topic $TOPIC
+
+  echo "[$timestamp] Produced message $counter to topic $TOPIC"
+  counter=$((counter + 1))
+  sleep $INTERVAL
+done
+PRODUCER_EOF
+
+chmod +x /opt/confluent/produce-data.sh
+
+# Create systemd service for data producer
+cat > /etc/systemd/system/confluent-producer.service <<'SERVICE_EOF'
+[Unit]
+Description=Confluent Sample Data Producer
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/opt/confluent/produce-data.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+# Start and enable the producer service
+systemctl daemon-reload
+systemctl start confluent-producer
+systemctl enable confluent-producer
+
+# Create startup script
+cat > /opt/confluent/start.sh <<'START_EOF'
+#!/bin/bash
+cd /opt/confluent
+docker compose up -d
+systemctl start confluent-producer
+echo "Confluent Platform started successfully"
+START_EOF
+
+chmod +x /opt/confluent/start.sh
+
+# Create stop script
+cat > /opt/confluent/stop.sh <<'STOP_EOF'
+#!/bin/bash
+systemctl stop confluent-producer
+cd /opt/confluent
+docker compose down
+echo "Confluent Platform stopped successfully"
+STOP_EOF
+
+chmod +x /opt/confluent/stop.sh
+
+# Create status check script
+cat > /opt/confluent/status.sh <<'STATUS_EOF'
+#!/bin/bash
+echo "=== Confluent Platform Status ==="
+echo ""
+echo "Docker Containers:"
+docker compose ps
+echo ""
+echo "Data Producer Service:"
+systemctl status confluent-producer --no-pager
+echo ""
+echo "Topic List:"
+docker exec broker kafka-topics --list --bootstrap-server localhost:9092
+STATUS_EOF
+
+chmod +x /opt/confluent/status.sh
+
+echo "Confluent Platform installation completed successfully!"
+echo "Access Control Center at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9021"
