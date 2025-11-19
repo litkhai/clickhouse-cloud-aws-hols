@@ -33,30 +33,31 @@ cd /opt/confluent
 # Get public IP address for Kafka external listener
 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 
-# Create Kafka JAAS configuration file (without Client section - we don't need SASL for Zookeeper)
-cat > kafka_server_jaas.conf <<'JAASEOF'
+# Create Kafka JAAS configuration file
+cat > kafka_server_jaas.conf <<JAAS_EOF
 KafkaServer {
-   org.apache.kafka.common.security.plain.PlainLoginModule required
-   username="admin"
-   password="admin-secret"
-   user_admin="admin-secret";
+  org.apache.kafka.common.security.plain.PlainLoginModule required
+  username="${sasl_username}"
+  password="${sasl_password}"
+  user_${sasl_username}="${sasl_password}";
 };
-JAASEOF
+JAAS_EOF
 
-# Create custom entrypoint script that bypasses preflight checks
-cat > custom-entrypoint.sh <<'ENTRYPOINT_EOF'
-#!/bin/bash
-set -e
+# Create client JAAS configuration file for local admin operations
+cat > kafka_client_jaas.conf <<CLIENT_JAAS_EOF
+KafkaClient {
+  org.apache.kafka.common.security.plain.PlainLoginModule required
+  username="${sasl_username}"
+  password="${sasl_password}";
+};
+CLIENT_JAAS_EOF
 
-# Export zookeeper SASL client disable
-export KAFKA_ZOOKEEPER_SET_ACL=false
-export ZOOKEEPER_SASL_ENABLED=false
-
-# Run the original entrypoint
-exec /etc/confluent/docker/run
-ENTRYPOINT_EOF
-
-chmod +x custom-entrypoint.sh
+# Create client properties file for command-line tools
+cat > client.properties <<CLIENT_PROPS_EOF
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="${sasl_username}" password="${sasl_password}";
+CLIENT_PROPS_EOF
 
 # Create docker-compose.yml for Confluent Platform
 cat > docker-compose.yml <<EOF
@@ -87,18 +88,12 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_ZOOKEEPER_SET_ACL: 'false'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,SASL_PLAINTEXT://$PUBLIC_IP:9092
       KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_LISTENER_NAME_SASL_PLAINTEXT_SASL_ENABLED_MECHANISMS: PLAIN
-      KAFKA_LISTENER_NAME_SASL_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: |
-        org.apache.kafka.common.security.plain.PlainLoginModule required \
-        username="${sasl_username}" \
-        password="${sasl_password}" \
-        user_${sasl_username}="${sasl_password}";
-      KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf -Dzookeeper.sasl.client=false"
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -108,9 +103,7 @@ services:
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
     volumes:
       - kafka-data:/var/lib/kafka/data
-      - ./kafka_server_jaas.conf:/etc/kafka/kafka_server_jaas.conf:ro
-      - ./custom-entrypoint.sh:/custom-entrypoint.sh:ro
-    entrypoint: ["/custom-entrypoint.sh"]
+      - ./kafka_server_jaas.conf:/etc/kafka/kafka_server_jaas.conf
 
   schema-registry:
     image: confluentinc/cp-schema-registry:${confluent_version}
@@ -152,6 +145,7 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
       CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+      CONNECT_SECURITY_PROTOCOL: PLAINTEXT
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:${confluent_version}
@@ -175,6 +169,7 @@ services:
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
       PORT: 9021
+      CONTROL_CENTER_STREAMS_SECURITY_PROTOCOL: PLAINTEXT
 
   ksqldb-server:
     image: confluentinc/cp-ksqldb-server:${confluent_version}
@@ -197,6 +192,7 @@ services:
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
       KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+      KSQL_SECURITY_PROTOCOL: PLAINTEXT
 
   rest-proxy:
     image: confluentinc/cp-kafka-rest:${confluent_version}
@@ -212,6 +208,7 @@ services:
       KAFKA_REST_BOOTSTRAP_SERVERS: 'broker:29092'
       KAFKA_REST_LISTENERS: "http://0.0.0.0:8082"
       KAFKA_REST_SCHEMA_REGISTRY_URL: 'http://schema-registry:8081'
+      KAFKA_REST_CLIENT_SECURITY_PROTOCOL: PLAINTEXT
 
 volumes:
   zookeeper-data:
@@ -226,8 +223,8 @@ docker compose up -d
 echo "Waiting for Kafka to be ready..."
 MAX_WAIT=300
 ELAPSED=0
-until docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1; do
-  if [ $ELAPSED -ge $MAX_WAIT ]; then
+until docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092 --command-config /opt/confluent/client.properties >/dev/null 2>&1; do
+  if [ $ELAPSED -ge $${MAX_WAIT} ]; then
     echo "ERROR: Kafka failed to start after $${MAX_WAIT} seconds"
     docker logs broker
     exit 1
@@ -239,15 +236,16 @@ done
 
 echo "Kafka is ready!"
 
-# Create sample topic
+# Create sample topic (using SASL authentication)
 docker exec broker kafka-topics --create \
   --bootstrap-server localhost:9092 \
+  --command-config /opt/confluent/client.properties \
   --topic ${topic_name} \
   --partitions 3 \
   --replication-factor 1 \
   --if-not-exists
 
-# Create data producer script
+# Create data producer script (with SASL authentication)
 cat > /opt/confluent/produce-data.sh <<'PRODUCER_EOF'
 #!/bin/bash
 
@@ -282,6 +280,7 @@ EOF
 
   echo "$message" | docker exec -i broker kafka-console-producer \
     --broker-list localhost:9092 \
+    --producer.config /opt/confluent/client.properties \
     --topic $TOPIC
 
   echo "[$timestamp] Produced message $counter to topic $TOPIC"
@@ -348,10 +347,14 @@ echo "Data Producer Service:"
 systemctl status confluent-producer --no-pager
 echo ""
 echo "Topic List:"
-docker exec broker kafka-topics --list --bootstrap-server localhost:9092
+docker exec broker kafka-topics --list --bootstrap-server localhost:9092 --command-config /opt/confluent/client.properties
 STATUS_EOF
 
 chmod +x /opt/confluent/status.sh
 
 echo "Confluent Platform installation completed successfully!"
 echo "Access Control Center at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9021"
+echo ""
+echo "SASL Authentication enabled:"
+echo "  Username (API Key): ${sasl_username}"
+echo "  Password (API Secret): ${sasl_password}"
