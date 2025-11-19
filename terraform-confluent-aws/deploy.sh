@@ -449,7 +449,7 @@ KEY_PAIR=$(grep "^key_pair_name" terraform.tfvars 2>/dev/null | cut -d'"' -f2 ||
 
 if [ -n "$KEY_PAIR" ]; then
     print_info "You can monitor the installation progress:"
-    echo "  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'tail -f /var/log/cloud-init-output.log'"
+    echo "  ssh -i /path/to/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'tail -f /var/log/cloud-init-output.log'"
     echo ""
 fi
 
@@ -473,19 +473,19 @@ SSH Command: $SSH_COMMAND
 Management Commands:
 -------------------
 Check Status:
-  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/status.sh'
+  ssh -i /path/to/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/status.sh'
 
 Stop Services:
-  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/stop.sh'
+  ssh -i /path/to/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/stop.sh'
 
 Start Services:
-  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/start.sh'
+  ssh -i /path/to/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/start.sh'
 
 View Producer Logs:
-  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo journalctl -u confluent-producer -f'
+  ssh -i /path/to/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo journalctl -u confluent-producer -f'
 
 Monitor Installation:
-  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'tail -f /var/log/cloud-init-output.log'
+  ssh -i /path/to/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'tail -f /var/log/cloud-init-output.log'
 
 Cleanup:
 --------

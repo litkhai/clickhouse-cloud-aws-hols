@@ -143,7 +143,7 @@ If you configured a key pair:
 terraform output ssh_command
 
 # Or manually connect
-ssh -i ~/.ssh/your-key.pem ubuntu@<instance-ip>
+ssh -i /path/to/your-key.pem ubuntu@<instance-ip>
 ```
 
 ### Management Scripts

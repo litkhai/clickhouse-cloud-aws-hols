@@ -45,7 +45,7 @@ output "kafka_bootstrap_servers" {
 
 output "ssh_command" {
   description = "SSH command to connect to the instance"
-  value       = var.key_pair_name != null ? "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip}" : "SSH key pair not configured"
+  value       = var.key_pair_name != null ? "ssh -i /path/to/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip}" : "SSH key pair not configured"
 }
 
 output "sample_topic_name" {
@@ -57,15 +57,15 @@ output "useful_commands" {
   description = "Useful commands to manage Confluent Platform"
   value = var.key_pair_name != null ? join("\n", [
     "# Check status",
-    "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo /opt/confluent/status.sh'",
+    "ssh -i /path/to/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo /opt/confluent/status.sh'",
     "",
     "# Stop Confluent Platform",
-    "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo /opt/confluent/stop.sh'",
+    "ssh -i /path/to/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo /opt/confluent/stop.sh'",
     "",
     "# Start Confluent Platform",
-    "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo /opt/confluent/start.sh'",
+    "ssh -i /path/to/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo /opt/confluent/start.sh'",
     "",
     "# View data producer logs",
-    "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo journalctl -u confluent-producer -f'"
+    "ssh -i /path/to/${var.key_pair_name}.pem ubuntu@${var.use_elastic_ip ? aws_eip.confluent_eip[0].public_ip : aws_instance.confluent.public_ip} 'sudo journalctl -u confluent-producer -f'"
   ]) : "SSH key pair not configured - SSH access not available"
 }
