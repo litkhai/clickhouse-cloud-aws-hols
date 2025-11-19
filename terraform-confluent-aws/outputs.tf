@@ -53,6 +53,17 @@ output "sample_topic_name" {
   value       = var.sample_topic_name
 }
 
+output "kafka_sasl_username" {
+  description = "Kafka SASL username (API Key)"
+  value       = var.kafka_sasl_username
+}
+
+output "kafka_sasl_password" {
+  description = "Kafka SASL password (API Secret)"
+  value       = var.kafka_sasl_password
+  sensitive   = true
+}
+
 output "useful_commands" {
   description = "Useful commands to manage Confluent Platform"
   value = var.key_pair_name != null ? join("\n", [

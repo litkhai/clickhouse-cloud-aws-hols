@@ -220,21 +220,34 @@ nc -zv <public-ip> 9092
 kafka-broker-api-versions --bootstrap-server <public-ip>:9092
 ```
 
-#### Example: External Python Client
+#### Example: External Python Client (with SASL Authentication)
 
 ```python
 from kafka import KafkaProducer, KafkaConsumer
 
+# Get credentials from Terraform outputs
+# terraform output kafka_sasl_username
+# terraform output -raw kafka_sasl_password
+
 # Producer
 producer = KafkaProducer(
-    bootstrap_servers=['<public-ip>:9092']
+    bootstrap_servers=['<public-ip>:9092'],
+    security_protocol='SASL_PLAINTEXT',
+    sasl_mechanism='PLAIN',
+    sasl_plain_username='admin',  # Your kafka_sasl_username
+    sasl_plain_password='admin-secret'  # Your kafka_sasl_password
 )
 producer.send('sample-data-topic', b'Hello from external client')
+producer.flush()
 
 # Consumer
 consumer = KafkaConsumer(
     'sample-data-topic',
     bootstrap_servers=['<public-ip>:9092'],
+    security_protocol='SASL_PLAINTEXT',
+    sasl_mechanism='PLAIN',
+    sasl_plain_username='admin',  # Your kafka_sasl_username
+    sasl_plain_password='admin-secret',  # Your kafka_sasl_password
     auto_offset_reset='earliest'
 )
 for message in consumer:
@@ -246,7 +259,85 @@ for message in consumer:
 | Port | Listener | Access From | Use Case |
 |------|----------|-------------|----------|
 | 29092 | PLAINTEXT | Docker containers | Internal service communication |
-| **9092** | **EXTERNAL** | **Anywhere (including SSH)** | **External clients and localhost** |
+| **9092** | **SASL_PLAINTEXT** | **Anywhere (including SSH)** | **External clients with SASL auth** |
+
+### SASL Authentication
+
+The Kafka broker is configured with **SASL/PLAIN authentication** (like Confluent Cloud's API Key/Secret model).
+
+#### Get Credentials
+
+```bash
+# Get username (API Key)
+terraform output kafka_sasl_username
+
+# Get password (API Secret)
+terraform output -raw kafka_sasl_password
+```
+
+Default credentials:
+- **Username (API Key)**: `admin`
+- **Password (API Secret)**: `admin-secret`
+
+⚠️ **Security Warning**: Change these default credentials in production! Edit `terraform.tfvars`:
+```hcl
+kafka_sasl_username = "your-api-key"
+kafka_sasl_password = "your-secret-key"
+```
+
+#### Command-line Tools with SASL
+
+```bash
+# List topics (from inside instance)
+docker exec broker kafka-topics --list \
+  --bootstrap-server localhost:9092 \
+  --command-config /opt/confluent/client.properties
+
+# Consume messages (from inside instance)
+docker exec broker kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic sample-data-topic \
+  --from-beginning \
+  --consumer.config /opt/confluent/client.properties
+
+# Produce messages (from inside instance)
+docker exec -i broker kafka-console-producer \
+  --broker-list localhost:9092 \
+  --topic sample-data-topic \
+  --producer.config /opt/confluent/client.properties
+```
+
+#### Java Client Configuration
+
+```java
+Properties props = new Properties();
+props.put("bootstrap.servers", "<public-ip>:9092");
+props.put("security.protocol", "SASL_PLAINTEXT");
+props.put("sasl.mechanism", "PLAIN");
+props.put("sasl.jaas.config",
+  "org.apache.kafka.common.security.plain.PlainLoginModule required " +
+  "username=\"admin\" password=\"admin-secret\";");
+
+KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+```
+
+#### Node.js Client Configuration
+
+```javascript
+const { Kafka } = require('kafkajs');
+
+const kafka = new Kafka({
+  brokers: ['<public-ip>:9092'],
+  sasl: {
+    mechanism: 'plain',
+    username: 'admin',
+    password: 'admin-secret'
+  }
+});
+
+const producer = kafka.producer();
+const consumer = kafka.consumer({ groupId: 'my-group' });
+```
 
 ## Sample Data Format
 

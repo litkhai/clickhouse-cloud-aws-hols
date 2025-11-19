@@ -62,3 +62,16 @@ variable "data_producer_interval" {
     error_message = "Data producer interval must be greater than 0 seconds."
   }
 }
+
+variable "kafka_sasl_username" {
+  description = "Kafka SASL username (API Key)"
+  type        = string
+  default     = "admin"
+}
+
+variable "kafka_sasl_password" {
+  description = "Kafka SASL password (API Secret)"
+  type        = string
+  default     = "admin-secret"
+  sensitive   = true
+}

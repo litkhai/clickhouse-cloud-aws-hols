@@ -155,6 +155,8 @@ resource "aws_instance" "confluent" {
     topic_name        = var.sample_topic_name
     data_interval     = var.data_producer_interval
     confluent_version = var.confluent_version
+    sasl_username     = var.kafka_sasl_username
+    sasl_password     = var.kafka_sasl_password
   })
 
   tags = {

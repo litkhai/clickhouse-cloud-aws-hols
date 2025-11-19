@@ -25,3 +25,7 @@ use_elastic_ip = false
 confluent_version = "7.5.0"
 sample_topic_name = "sample-data-topic"
 data_producer_interval = 5  # seconds between data production
+
+# Kafka SASL Authentication (like Confluent Cloud API Key/Secret)
+kafka_sasl_username = "admin"
+kafka_sasl_password = "admin-secret"
