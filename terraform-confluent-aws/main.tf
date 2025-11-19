@@ -55,22 +55,13 @@ resource "aws_security_group" "confluent_sg" {
     description = "ZooKeeper"
   }
 
-  # Kafka Broker (PLAINTEXT)
+  # Kafka Broker
   ingress {
     from_port   = 9092
     to_port     = 9092
     protocol    = "tcp"
     cidr_blocks = var.allowed_cidr_blocks
     description = "Kafka Broker"
-  }
-
-  # Kafka Broker (External)
-  ingress {
-    from_port   = 9093
-    to_port     = 9093
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
-    description = "Kafka Broker External"
   }
 
   # Schema Registry

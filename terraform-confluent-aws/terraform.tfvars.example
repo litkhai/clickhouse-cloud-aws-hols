@@ -1,6 +1,7 @@
 # AWS Configuration
 # Region where resources will be deployed
 # If not set, uses AWS_REGION or AWS_DEFAULT_REGION environment variable
+# Leave commented to use AWS CLI configured region
 # aws_region = "us-east-1"
 
 # EC2 Instance Configuration

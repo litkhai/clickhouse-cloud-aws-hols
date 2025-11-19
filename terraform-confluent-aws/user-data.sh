@@ -30,8 +30,11 @@ systemctl enable docker
 mkdir -p /opt/confluent
 cd /opt/confluent
 
+# Get public IP address for Kafka external listener
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
 # Create docker-compose.yml for Confluent Platform
-cat > docker-compose.yml <<'EOF'
+cat > docker-compose.yml <<EOF
 version: '3.8'
 
 services:
@@ -56,12 +59,11 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
-      - "9093:9093"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092,EXTERNAL://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,EXTERNAL://$PUBLIC_IP:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -183,7 +185,20 @@ docker compose up -d
 
 # Wait for Kafka to be ready
 echo "Waiting for Kafka to be ready..."
-sleep 60
+MAX_WAIT=300
+ELAPSED=0
+until docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1; do
+  if [ $ELAPSED -ge $MAX_WAIT ]; then
+    echo "ERROR: Kafka failed to start after $${MAX_WAIT} seconds"
+    docker logs broker
+    exit 1
+  fi
+  echo "Waiting for Kafka... ($ELAPSED/$MAX_WAIT seconds)"
+  sleep 10
+  ELAPSED=$((ELAPSED + 10))
+done
+
+echo "Kafka is ready!"
 
 # Create sample topic
 docker exec broker kafka-topics --create \

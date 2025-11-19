@@ -97,12 +97,16 @@ if [ -n "$AWS_REGION" ]; then
 elif [ -n "$AWS_DEFAULT_REGION" ]; then
     DETECTED_REGION="$AWS_DEFAULT_REGION"
     print_success "AWS region from environment: $AWS_DEFAULT_REGION"
-# Check terraform.tfvars
-elif grep -q "aws_region" terraform.tfvars 2>/dev/null; then
-    DETECTED_REGION=$(grep "aws_region" terraform.tfvars | cut -d'"' -f2)
-    print_success "AWS region from terraform.tfvars: $DETECTED_REGION"
-# Check AWS CLI configuration
-elif command -v aws &> /dev/null; then
+# Check terraform.tfvars (only uncommented lines)
+elif [ -f terraform.tfvars ] && grep -q "^[^#]*aws_region\s*=\s*\".\+\"" terraform.tfvars 2>/dev/null; then
+    DETECTED_REGION=$(grep "^[^#]*aws_region" terraform.tfvars | cut -d'"' -f2 | head -1)
+    if [ -n "$DETECTED_REGION" ]; then
+        print_success "AWS region from terraform.tfvars: $DETECTED_REGION"
+    fi
+fi
+
+# Check AWS CLI configuration if no region found yet
+if [ -z "$DETECTED_REGION" ] && command -v aws &> /dev/null; then
     AWS_CLI_REGION=$(aws configure get region 2>/dev/null)
     if [ -n "$AWS_CLI_REGION" ]; then
         DETECTED_REGION="$AWS_CLI_REGION"
@@ -439,15 +443,23 @@ echo ""
 print_info "The instance is starting up and installing Confluent Platform..."
 print_info "This may take 5-10 minutes to complete."
 echo ""
-print_info "You can monitor the installation progress:"
-echo "  ssh ubuntu@$PUBLIC_IP 'tail -f /var/log/cloud-init-output.log'"
-echo ""
+
+# Get key pair name from terraform.tfvars
+KEY_PAIR=$(grep "^key_pair_name" terraform.tfvars 2>/dev/null | cut -d'"' -f2 || echo "")
+
+if [ -n "$KEY_PAIR" ]; then
+    print_info "You can monitor the installation progress:"
+    echo "  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'tail -f /var/log/cloud-init-output.log'"
+    echo ""
+fi
+
 print_info "Once installation is complete, access the Control Center at:"
 echo "  $CONTROL_CENTER_URL"
 echo ""
 
 # Save outputs to file
 OUTPUT_FILE="deployment-info.txt"
+if [ -n "$KEY_PAIR" ]; then
 cat > "$OUTPUT_FILE" <<EOF
 Confluent Platform Deployment Information
 ==========================================
@@ -461,16 +473,19 @@ SSH Command: $SSH_COMMAND
 Management Commands:
 -------------------
 Check Status:
-  ssh ubuntu@$PUBLIC_IP 'sudo /opt/confluent/status.sh'
+  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/status.sh'
 
 Stop Services:
-  ssh ubuntu@$PUBLIC_IP 'sudo /opt/confluent/stop.sh'
+  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/stop.sh'
 
 Start Services:
-  ssh ubuntu@$PUBLIC_IP 'sudo /opt/confluent/start.sh'
+  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo /opt/confluent/start.sh'
 
 View Producer Logs:
-  ssh ubuntu@$PUBLIC_IP 'sudo journalctl -u confluent-producer -f'
+  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'sudo journalctl -u confluent-producer -f'
+
+Monitor Installation:
+  ssh -i ~/.ssh/${KEY_PAIR}.pem ubuntu@$PUBLIC_IP 'tail -f /var/log/cloud-init-output.log'
 
 Cleanup:
 --------
@@ -479,6 +494,26 @@ To destroy all resources:
   or
   terraform destroy
 EOF
+else
+cat > "$OUTPUT_FILE" <<EOF
+Confluent Platform Deployment Information
+==========================================
+Deployment Date: $(date)
+
+Control Center URL: $CONTROL_CENTER_URL
+Public IP: $PUBLIC_IP
+Kafka Bootstrap Servers: $KAFKA_BOOTSTRAP
+
+Note: SSH key pair not configured - SSH access not available
+
+Cleanup:
+--------
+To destroy all resources:
+  ./destroy.sh
+  or
+  terraform destroy
+EOF
+fi
 
 print_success "Deployment information saved to: $OUTPUT_FILE"
 echo ""

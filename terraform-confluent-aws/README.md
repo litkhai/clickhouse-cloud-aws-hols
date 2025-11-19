@@ -86,7 +86,7 @@ Open the URL in your browser to access the Confluent Control Center Web UI.
 
 1. **EC2 Instance**: Ubuntu 22.04 LTS with Docker
 2. **ZooKeeper**: Cluster coordination (port 2181)
-3. **Kafka Broker**: Message streaming (ports 9092, 9093)
+3. **Kafka Broker**: Message streaming (port 9092)
 4. **Schema Registry**: Schema management (port 8081)
 5. **Kafka Connect**: Data integration (port 8083)
 6. **ksqlDB**: Stream processing (port 8088)
@@ -101,8 +101,7 @@ The deployment creates a security group with the following ingress rules:
 | Port | Service | Description |
 |------|---------|-------------|
 | 2181 | ZooKeeper | Cluster coordination |
-| 9092 | Kafka | Internal broker access |
-| 9093 | Kafka | External broker access |
+| 9092 | Kafka | Broker access (internal and external) |
 | 8081 | Schema Registry | Schema management API |
 | 8083 | Kafka Connect | Connect API |
 | 8088 | ksqlDB | ksqlDB API |
@@ -167,24 +166,34 @@ sudo journalctl -u confluent-producer -f
 
 ### Using Kafka
 
-#### List Topics
+#### Understanding Kafka Listeners
+
+Kafka is configured with **two listeners**:
+
+- **PLAINTEXT (port 29092)**: Internal Docker network communication
+- **EXTERNAL (port 9092)**: External client access (from anywhere, including localhost)
+
+#### List Topics (from SSH)
 
 ```bash
+# From inside the instance
 docker exec broker kafka-topics --list --bootstrap-server localhost:9092
 ```
 
-#### Consume Messages
+#### Consume Messages (from SSH)
 
 ```bash
+# From inside the instance
 docker exec broker kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic sample-data-topic \
   --from-beginning
 ```
 
-#### Produce Messages
+#### Produce Messages (from SSH)
 
 ```bash
+# From inside the instance
 docker exec -i broker kafka-console-producer \
   --broker-list localhost:9092 \
   --topic sample-data-topic
@@ -192,14 +201,52 @@ docker exec -i broker kafka-console-producer \
 
 ### Connecting from External Applications
 
-Use the external bootstrap server for remote connections:
+External clients connect using port **9092** (same as Confluent Cloud):
 
 ```bash
-# Get bootstrap servers
+# Get the external bootstrap server
 terraform output kafka_bootstrap_servers
 
-# Example: <public-ip>:9093
+# Example output: 203.0.113.13:9092
 ```
+
+#### Test External Connection
+
+```bash
+# Test connectivity
+nc -zv <public-ip> 9092
+
+# Test Kafka API from local machine (requires kafka tools)
+kafka-broker-api-versions --bootstrap-server <public-ip>:9092
+```
+
+#### Example: External Python Client
+
+```python
+from kafka import KafkaProducer, KafkaConsumer
+
+# Producer
+producer = KafkaProducer(
+    bootstrap_servers=['<public-ip>:9092']
+)
+producer.send('sample-data-topic', b'Hello from external client')
+
+# Consumer
+consumer = KafkaConsumer(
+    'sample-data-topic',
+    bootstrap_servers=['<public-ip>:9092'],
+    auto_offset_reset='earliest'
+)
+for message in consumer:
+    print(message.value)
+```
+
+#### Port Summary
+
+| Port | Listener | Access From | Use Case |
+|------|----------|-------------|----------|
+| 29092 | PLAINTEXT | Docker containers | Internal service communication |
+| **9092** | **EXTERNAL** | **Anywhere (including SSH)** | **External clients and localhost** |
 
 ## Sample Data Format
 
