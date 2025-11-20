@@ -6,6 +6,8 @@ from confluent_kafka.admin import AdminClient
 import sys
 
 # NLB connection with SSL
+# Note: Using self-signed certificate requires disabling certificate verification
+# For production, use a proper CA-signed certificate
 nlb_config = {
     'bootstrap.servers': 'confluent-server-nlb-7a232632237e1127.elb.ap-northeast-2.amazonaws.com:9094',
     'security.protocol': 'SASL_SSL',
@@ -13,7 +15,7 @@ nlb_config = {
     'sasl.username': 'admin',
     'sasl.password': 'admin-secret',
     'ssl.ca.location': 'certs/nlb-certificate.pem',
-    'enable.ssl.certificate.verification': False,
+    'enable.ssl.certificate.verification': False,  # Required for self-signed certificates
 }
 
 # Direct EC2 connection without SSL
