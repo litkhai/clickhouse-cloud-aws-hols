@@ -1,28 +1,28 @@
 # Confluent Platform with NLB SSL Termination
 
-## ⚠️ **WARNING: This Architecture Does NOT Work as Intended**
+## ✅ **SOLUTION: Advertised Listener Fix**
 
-This Terraform configuration was created to **test** NLB SSL termination with Kafka, but **the architecture has fundamental flaws** that prevent it from working with standard Kafka clients.
+This Terraform configuration demonstrates **NLB SSL termination with Kafka** using the **advertised listener pattern**.
 
-**TL;DR**: This project demonstrates what **doesn't work** and explains why. For a working Kafka SSL setup, see `terraform-confluent-aws` instead.
+**TL;DR**: By configuring Kafka to advertise the NLB DNS instead of EC2 DNS, clients maintain protocol consistency throughout their connection lifecycle.
 
-See [Architecture Limitations & Test Results](#architecture-limitations--test-results) section below for detailed explanation.
+See [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md) for detailed explanation of the solution.
 
-## Architecture (Tested - Does NOT Work)
+## Architecture (Working Solution)
 
 ```
 External Client (SASL_SSL)
         ↓
-    NLB:9094 (SSL/TLS Termination)  ← Initial connection works
+    NLB:9094 (SSL/TLS Termination)  ← Initial connection with SSL
         ↓
     Kafka Broker:9092 (SASL_PLAINTEXT - No TLS)
         ↓
-    Kafka returns: "I'm at EC2:9092"
+    Kafka advertises: "I'm at NLB:9094"  ← Key fix!
         ↓
-    Client → EC2:9092 (SASL_SSL)  ← FAILS: Protocol mismatch!
+    Client → NLB:9094 (SASL_SSL)  ← ✅ Works! Stays at NLB
 ```
 
-**Problem**: Kafka advertises EC2:9092 as PLAINTEXT, but clients expect SASL_SSL after connecting via NLB.
+**Solution**: Kafka advertises NLB:9094 instead of EC2:9092, keeping clients at the NLB where SSL is handled.
 
 ### Key Features (What Was Tested)
 
@@ -464,8 +464,30 @@ Approximate AWS costs (us-east-1):
 4. **Certificate Management**: NLB certificate (vs Kafka broker certificates)
 5. **Architecture**: SSL termination at load balancer (vs end-to-end encryption)
 
+## SSL Certificate Configuration
+
+This project uses **self-signed certificates** for testing. For production use:
+
+### Using Self-Signed Certificates (Testing Only)
+
+See [SSL_CERTIFICATE_GUIDE.md](SSL_CERTIFICATE_GUIDE.md) for:
+- Python, Go, Java, Node.js configuration examples
+- How to disable certificate verification for testing
+- Certificate troubleshooting
+
+### Using Valid CA-Signed Certificates (Production)
+
+See [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md) for:
+- Setting up custom domain (e.g., `kafka.yourcompany.com`)
+- Obtaining valid certificates from Let's Encrypt or ACM
+- Configuring Route 53 DNS
+- No certificate verification issues!
+
+**Recommended for Production**: Use a custom domain with valid certificates.
+
 ## References
 
 - [AWS Network Load Balancer - TLS Termination](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/create-tls-listener.html)
 - [Confluent Platform Documentation](https://docs.confluent.io/)
 - [Kafka Security Documentation](https://kafka.apache.org/documentation/#security)
+- [Kafka Advertised Listeners](https://cwiki.apache.org/confluence/display/KAFKA/KIP-103+-+Separation+of+Internal+and+External+traffic)
