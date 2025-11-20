@@ -75,3 +75,10 @@ variable "kafka_sasl_password" {
   default     = "admin-secret"
   sensitive   = true
 }
+
+variable "ssh_private_key" {
+  description = "Path to SSH private key file for remote-exec provisioner. If not provided, advertised listener update will be skipped"
+  type        = string
+  default     = null
+  sensitive   = true
+}

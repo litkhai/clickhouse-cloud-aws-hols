@@ -271,6 +271,38 @@ resource "null_resource" "update_nlb_cert" {
   }
 }
 
+# Update Kafka advertised listener with NLB DNS
+resource "null_resource" "update_kafka_advertised_listener" {
+  depends_on = [aws_lb.kafka_nlb, aws_instance.confluent]
+
+  triggers = {
+    nlb_dns = aws_lb.kafka_nlb.dns_name
+    instance_id = aws_instance.confluent.id
+  }
+
+  provisioner "remote-exec" {
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = var.ssh_private_key != null ? file(var.ssh_private_key) : null
+      host        = aws_instance.confluent.public_ip
+      timeout     = "5m"
+    }
+
+    inline = [
+      "echo 'Waiting for docker-compose to be ready...'",
+      "timeout 300 bash -c 'until [ -f /opt/confluent/docker-compose.yml ]; do sleep 5; done' || true",
+      "echo 'Updating Kafka advertised listener with NLB DNS: ${aws_lb.kafka_nlb.dns_name}'",
+      "sudo sed -i 's/NLB_DNS_PLACEHOLDER/${aws_lb.kafka_nlb.dns_name}/g' /opt/confluent/docker-compose.yml",
+      "echo 'Restarting Kafka broker...'",
+      "cd /opt/confluent && sudo docker-compose restart broker",
+      "echo 'Waiting for Kafka to be ready...'",
+      "sleep 30",
+      "echo '✓ Kafka advertised listener updated to: ${aws_lb.kafka_nlb.dns_name}:9094'"
+    ]
+  }
+}
+
 # NLB Target Group for Kafka (port 9092)
 resource "aws_lb_target_group" "kafka" {
   name     = "${var.instance_name}-kafka-tg"
