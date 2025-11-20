@@ -1,0 +1,31 @@
+# AWS Configuration
+# Region where resources will be deployed
+# If not set, uses AWS_REGION or AWS_DEFAULT_REGION environment variable
+# Leave commented to use AWS CLI configured region
+# aws_region = "us-east-1"
+
+# EC2 Instance Configuration
+instance_name   = "confluent-server"
+instance_type   = "r5.xlarge" # Minimum recommended for Confluent Platform
+ebs_volume_size = 100
+
+# SSH Access Configuration
+# Uncomment and set your key pair name for SSH access
+key_pair_name = "kenlee_seoul_key"
+
+# Network Configuration
+# CIDR blocks allowed to access Confluent Platform
+# Default allows access from anywhere - restrict this in production!
+allowed_cidr_blocks = ["0.0.0.0/0"]
+
+# Set to true to allocate a static Elastic IP
+use_elastic_ip = false
+
+# Confluent Platform Configuration
+confluent_version      = "7.5.0"
+sample_topic_name      = "sample-data-topic"
+data_producer_interval = 5 # seconds between data production
+
+# Kafka SASL Authentication (like Confluent Cloud API Key/Secret)
+kafka_sasl_username = "admin"
+kafka_sasl_password = "admin-secret"

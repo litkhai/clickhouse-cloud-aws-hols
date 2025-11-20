@@ -76,9 +76,5 @@ variable "kafka_sasl_password" {
   sensitive   = true
 }
 
-variable "ssh_private_key" {
-  description = "Path to SSH private key file for remote-exec provisioner. If not provided, advertised listener update will be skipped"
-  type        = string
-  default     = null
-  sensitive   = true
-}
+# NOTE: ssh_private_key is read by deploy-complete.sh script from terraform.tfvars
+# It is NOT a Terraform variable - the script uses it for post-deployment SSH access

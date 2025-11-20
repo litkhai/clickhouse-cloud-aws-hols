@@ -7,17 +7,18 @@ import sys
 
 # NLB connection with SSL
 nlb_config = {
-    'bootstrap.servers': 'confluent-server-nlb-89e02373ca2b3bc1.elb.ap-northeast-2.amazonaws.com:9094',
+    'bootstrap.servers': 'confluent-server-nlb-7a232632237e1127.elb.ap-northeast-2.amazonaws.com:9094',
     'security.protocol': 'SASL_SSL',
     'sasl.mechanism': 'PLAIN',
     'sasl.username': 'admin',
     'sasl.password': 'admin-secret',
     'ssl.ca.location': 'certs/nlb-certificate.pem',
+    'enable.ssl.certificate.verification': False,
 }
 
 # Direct EC2 connection without SSL
 direct_config = {
-    'bootstrap.servers': 'ec2-203-0-113-21.ap-northeast-2.compute.amazonaws.com:9092',
+    'bootstrap.servers': 'ec2-203-0-113-20.ap-northeast-2.compute.amazonaws.com:9092',
     'security.protocol': 'SASL_PLAINTEXT',
     'sasl.mechanism': 'PLAIN',
     'sasl.username': 'admin',

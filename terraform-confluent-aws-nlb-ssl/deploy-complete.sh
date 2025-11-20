@@ -344,9 +344,18 @@ else
         exit 1
     fi
 
+    # Build SSH command with or without -i option
+    if [ -n "$SSH_KEY_PATH" ] && [ -f "$SSH_KEY_PATH" ]; then
+        SSH_CMD="ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=no -o ConnectTimeout=5"
+        print_info "Using SSH key file: $SSH_KEY_PATH"
+    else
+        SSH_CMD="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5"
+        print_info "Using SSH agent (no key file specified)"
+    fi
+
     echo ""
     print_info "Waiting for docker-compose.yml to be created..."
-    if timeout 600 bash -c "until ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@${EC2_DNS} 'test -f /opt/confluent/docker-compose.yml' 2>/dev/null; do sleep 10; done" 2>/dev/null; then
+    if timeout 600 bash -c "until $SSH_CMD ubuntu@${EC2_DNS} 'test -f /opt/confluent/docker-compose.yml' 2>/dev/null; do sleep 10; done" 2>/dev/null; then
         print_success "docker-compose.yml is ready"
     else
         print_error "Timeout waiting for docker-compose.yml"
@@ -356,7 +365,7 @@ else
     echo ""
     print_info "Updating advertised listener with NLB DNS..."
 
-    ssh -i "${SSH_KEY_PATH}" -o StrictHostKeyChecking=no ubuntu@${EC2_DNS} << EOF
+    $SSH_CMD ubuntu@${EC2_DNS} << EOF
         echo "Updating docker-compose.yml..."
         sudo sed -i 's/NLB_DNS_PLACEHOLDER/${NLB_DNS}/g' /opt/confluent/docker-compose.yml
 
