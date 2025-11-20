@@ -30,8 +30,110 @@ systemctl enable docker
 mkdir -p /opt/confluent
 cd /opt/confluent
 
-# Get public IP address for Kafka external listener
+# Get AWS EC2 metadata
 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+PUBLIC_DNS=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)
+
+echo "Instance Metadata:"
+echo "  Public IP:  $PUBLIC_IP"
+echo "  Public DNS: $PUBLIC_DNS"
+
+# Generate TLS certificates with proper CA chain
+echo "Generating TLS certificates with CA..."
+
+# Step 1: Create CA (Certificate Authority)
+echo "Creating Certificate Authority..."
+openssl req -new -x509 \
+  -keyout ca-key.pem \
+  -out ca-cert.pem \
+  -days 3650 \
+  -passout pass:confluent \
+  -subj "/C=KR/ST=Seoul/L=Seoul/O=Confluent/OU=Engineering/CN=Confluent-CA"
+
+# Step 2: Create broker keystore and generate certificate request
+echo "Creating broker keystore..."
+keytool -genkeypair \
+  -alias kafka-broker \
+  -keyalg RSA \
+  -keysize 2048 \
+  -keystore kafka.server.keystore.jks \
+  -storepass confluent \
+  -keypass confluent \
+  -dname "CN=$PUBLIC_DNS,OU=Engineering,O=Confluent,L=Seoul,ST=Seoul,C=KR" \
+  -validity 3650 \
+  -ext SAN=DNS:$PUBLIC_DNS,DNS:broker,DNS:localhost,IP:$PUBLIC_IP,IP:127.0.0.1
+
+# Step 3: Create certificate signing request (CSR)
+echo "Creating certificate signing request..."
+keytool -certreq \
+  -alias kafka-broker \
+  -keystore kafka.server.keystore.jks \
+  -storepass confluent \
+  -keypass confluent \
+  -file broker-cert-request.csr
+
+# Step 4: Sign the certificate with CA
+echo "Signing certificate with CA..."
+openssl x509 -req \
+  -in broker-cert-request.csr \
+  -CA ca-cert.pem \
+  -CAkey ca-key.pem \
+  -CAcreateserial \
+  -out broker-cert-signed.pem \
+  -days 3650 \
+  -passin pass:confluent \
+  -extensions v3_req \
+  -extfile <(cat <<EOF
+[v3_req]
+subjectAltName = DNS:$PUBLIC_DNS,DNS:broker,DNS:localhost,IP:$PUBLIC_IP,IP:127.0.0.1
+EOF
+)
+
+# Step 5: Import CA certificate into broker keystore
+echo "Importing CA certificate into keystore..."
+keytool -importcert \
+  -alias CARoot \
+  -file ca-cert.pem \
+  -keystore kafka.server.keystore.jks \
+  -storepass confluent \
+  -noprompt
+
+# Step 6: Import signed certificate into broker keystore
+echo "Importing signed certificate into keystore..."
+keytool -importcert \
+  -alias kafka-broker \
+  -file broker-cert-signed.pem \
+  -keystore kafka.server.keystore.jks \
+  -storepass confluent \
+  -keypass confluent \
+  -noprompt
+
+# Step 7: Create truststore and import CA certificate
+echo "Creating truststore..."
+keytool -importcert \
+  -alias CARoot \
+  -file ca-cert.pem \
+  -keystore kafka.server.truststore.jks \
+  -storepass confluent \
+  -noprompt
+
+# Step 8: Create client truststore (same as server truststore for self-signed CA)
+cp kafka.server.truststore.jks kafka.client.truststore.jks
+
+# Step 9: Export CA certificate for client use (PEM format)
+cp ca-cert.pem kafka-ca-cert.crt
+
+# Step 10: Create combined certificate bundle (CA + broker cert) for clients
+cat broker-cert-signed.pem ca-cert.pem > kafka-broker-cert-bundle.crt
+
+# For backward compatibility, also export just the broker certificate
+openssl x509 -in broker-cert-signed.pem -out kafka-broker-cert.crt
+
+echo "TLS certificates generated successfully!"
+echo "  Primary hostname: $PUBLIC_DNS"
+echo "  CA Certificate: kafka-ca-cert.crt (recommended for clients)"
+echo "  Broker Certificate: kafka-broker-cert.crt"
+echo "  Certificate Bundle: kafka-broker-cert-bundle.crt"
 
 # Create Kafka JAAS configuration file (without Client section - we don't need SASL for Zookeeper)
 cat > kafka_server_jaas.conf <<'JAASEOF'
@@ -57,6 +159,11 @@ exec /etc/confluent/docker/run
 ENTRYPOINT_EOF
 
 chmod +x custom-entrypoint.sh
+
+# Create credential files for SSL
+echo "confluent" > keystore_creds
+echo "confluent" > key_creds
+echo "confluent" > truststore_creds
 
 # Create docker-compose.yml for Confluent Platform
 cat > docker-compose.yml <<EOF
@@ -84,13 +191,14 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
+      - "9093:9093"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_ZOOKEEPER_SET_ACL: 'false'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,SASL_PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,SASL_PLAINTEXT://$PUBLIC_IP:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,SASL_SSL:SASL_SSL,SASL_PLAINTEXT:SASL_PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,SASL_SSL://0.0.0.0:9092,SASL_PLAINTEXT://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,SASL_SSL://$PUBLIC_DNS:9092,SASL_PLAINTEXT://$PUBLIC_DNS:9093
       KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_LISTENER_NAME_SASL_PLAINTEXT_SASL_ENABLED_MECHANISMS: PLAIN
@@ -99,6 +207,18 @@ services:
         username="${sasl_username}" \
         password="${sasl_password}" \
         user_${sasl_username}="${sasl_password}";
+      KAFKA_LISTENER_NAME_SASL_SSL_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_LISTENER_NAME_SASL_SSL_PLAIN_SASL_JAAS_CONFIG: |
+        org.apache.kafka.common.security.plain.PlainLoginModule required \
+        username="${sasl_username}" \
+        password="${sasl_password}" \
+        user_${sasl_username}="${sasl_password}";
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.server.keystore.jks
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: keystore_creds
+      KAFKA_SSL_KEY_CREDENTIALS: key_creds
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.server.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: truststore_creds
+      KAFKA_SSL_CLIENT_AUTH: 'none'
       KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf -Dzookeeper.sasl.client=false"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -111,6 +231,11 @@ services:
       - kafka-data:/var/lib/kafka/data
       - ./kafka_server_jaas.conf:/etc/kafka/kafka_server_jaas.conf:ro
       - ./custom-entrypoint.sh:/custom-entrypoint.sh:ro
+      - ./kafka.server.keystore.jks:/etc/kafka/secrets/kafka.server.keystore.jks:ro
+      - ./kafka.server.truststore.jks:/etc/kafka/secrets/kafka.server.truststore.jks:ro
+      - ./keystore_creds:/etc/kafka/secrets/keystore_creds:ro
+      - ./key_creds:/etc/kafka/secrets/key_creds:ro
+      - ./truststore_creds:/etc/kafka/secrets/truststore_creds:ro
     entrypoint: ["/custom-entrypoint.sh"]
 
   schema-registry:
@@ -356,24 +481,35 @@ chmod +x /opt/confluent/status.sh
 
 echo ""
 echo "================================================================================"
-echo "✓✓✓ Confluent Platform with SASL/PLAIN Authentication Deployed Successfully ✓✓✓"
+echo "✓✓✓ Confluent Platform with SASL/PLAIN + TLS Deployed Successfully ✓✓✓"
 echo "================================================================================"
 echo ""
-echo "Kafka Bootstrap Server:"
-echo "  $PUBLIC_IP:9092"
+echo "Instance Information:"
+echo "  Public DNS:  $PUBLIC_DNS"
+echo "  Public IP:   $PUBLIC_IP"
+echo ""
+echo "Kafka Bootstrap Servers:"
+echo "  SASL_SSL (with TLS):            $PUBLIC_DNS:9092  [PRIMARY - Recommended]"
+echo "  SASL_PLAINTEXT (no encryption): $PUBLIC_DNS:9093  [FALLBACK]"
 echo ""
 echo "Authentication Credentials:"
-echo "  Security Protocol: SASL_PLAINTEXT"
 echo "  SASL Mechanism:    PLAIN"
 echo "  Username:          ${sasl_username}"
 echo "  Password:          ${sasl_password}"
 echo ""
+echo "TLS Certificates:"
+echo "  CA Certificate:    /opt/confluent/kafka-ca-cert.crt (recommended for clients)"
+echo "  Broker Cert:       /opt/confluent/kafka-broker-cert.crt"
+echo "  Cert Bundle:       /opt/confluent/kafka-broker-cert-bundle.crt (CA + broker)"
+echo "  Download via:      scp -i key.pem ubuntu@$PUBLIC_DNS:/opt/confluent/kafka-ca-cert.crt ."
+echo "  Note:              Use CA certificate in ssl.ca.location for proper verification"
+echo ""
 echo "Service URLs:"
-echo "  Control Center:    http://$PUBLIC_IP:9021"
-echo "  Schema Registry:   http://$PUBLIC_IP:8081"
-echo "  Kafka Connect:     http://$PUBLIC_IP:8083"
-echo "  ksqlDB Server:     http://$PUBLIC_IP:8088"
-echo "  REST Proxy:        http://$PUBLIC_IP:8082"
+echo "  Control Center:    http://$PUBLIC_DNS:9021"
+echo "  Schema Registry:   http://$PUBLIC_DNS:8081"
+echo "  Kafka Connect:     http://$PUBLIC_DNS:8083"
+echo "  ksqlDB Server:     http://$PUBLIC_DNS:8088"
+echo "  REST Proxy:        http://$PUBLIC_DNS:8082"
 echo ""
 echo "Sample Topic:        ${topic_name}"
 echo ""
@@ -396,23 +532,47 @@ cat > /opt/confluent/CONNECTION_INFO.md <<CONNEOF
 
 ## Quick Connection Details
 
-### Kafka Bootstrap Server
-\`\`\`
-$PUBLIC_IP:9092
-\`\`\`
+### Kafka Bootstrap Servers
+- **SASL_SSL (with TLS):** $PUBLIC_DNS:9092 [PRIMARY - Recommended]
+- **SASL_PLAINTEXT (no encryption):** $PUBLIC_DNS:9093 [FALLBACK]
 
 ### Authentication
-- **Security Protocol:** SASL_PLAINTEXT
 - **SASL Mechanism:** PLAIN
 - **Username:** ${sasl_username}
 - **Password:** ${sasl_password}
 
-### Python Example (confluent-kafka)
+### TLS Certificates (for SASL_SSL)
+- **CA Certificate:** /opt/confluent/kafka-ca-cert.crt (recommended - resolves "unknown authority" error)
+- **Broker Certificate:** /opt/confluent/kafka-broker-cert.crt
+- **Certificate Bundle:** /opt/confluent/kafka-broker-cert-bundle.crt (CA + broker combined)
+- **Download CA Cert:** \`scp -i key.pem ubuntu@$PUBLIC_DNS:/opt/confluent/kafka-ca-cert.crt .\`
+- **Important:** Use CA certificate in \`ssl.ca.location\` for proper verification without disabling checks
+
+## Connection Examples
+
+### Python (confluent-kafka) - SASL_SSL (with TLS) [RECOMMENDED]
 \`\`\`python
 from confluent_kafka import Producer
 
 config = {
-    'bootstrap.servers': '$PUBLIC_IP:9092',
+    'bootstrap.servers': '$PUBLIC_DNS:9092',
+    'security.protocol': 'SASL_SSL',
+    'sasl.mechanism': 'PLAIN',
+    'sasl.username': '${sasl_username}',
+    'sasl.password': '${sasl_password}',
+    'ssl.ca.location': 'kafka-ca-cert.crt',  # Download CA cert from server
+    # NO NEED to disable verification - CA certificate resolves the "unknown authority" error!
+}
+
+producer = Producer(config)
+\`\`\`
+
+### Python (confluent-kafka) - SASL_PLAINTEXT (no encryption)
+\`\`\`python
+from confluent_kafka import Producer
+
+config = {
+    'bootstrap.servers': '$PUBLIC_DNS:9093',
     'security.protocol': 'SASL_PLAINTEXT',
     'sasl.mechanism': 'PLAIN',
     'sasl.username': '${sasl_username}',
@@ -422,12 +582,28 @@ config = {
 producer = Producer(config)
 \`\`\`
 
-### ClickHouse Kafka Engine
+### ClickHouse Kafka Engine - SASL_SSL (with TLS) [RECOMMENDED]
+\`\`\`sql
+CREATE TABLE kafka_queue_ssl
+ENGINE = Kafka()
+SETTINGS
+    kafka_broker_list = '$PUBLIC_DNS:9092',
+    kafka_topic_list = '${topic_name}',
+    kafka_group_name = 'clickhouse_group_ssl',
+    kafka_format = 'JSONEachRow',
+    kafka_sasl_mechanism = 'PLAIN',
+    kafka_sasl_username = '${sasl_username}',
+    kafka_sasl_password = '${sasl_password}',
+    kafka_security_protocol = 'SASL_SSL',
+    kafka_skip_broken_messages = 1;
+\`\`\`
+
+### ClickHouse Kafka Engine - SASL_PLAINTEXT (no encryption)
 \`\`\`sql
 CREATE TABLE kafka_queue
 ENGINE = Kafka()
 SETTINGS
-    kafka_broker_list = '$PUBLIC_IP:9092',
+    kafka_broker_list = '$PUBLIC_DNS:9093',
     kafka_topic_list = '${topic_name}',
     kafka_group_name = 'clickhouse_group',
     kafka_format = 'JSONEachRow',
@@ -437,7 +613,7 @@ SETTINGS
     kafka_security_protocol = 'SASL_PLAINTEXT';
 \`\`\`
 
-### Command Line
+### Command Line - SASL_PLAINTEXT
 Create sasl-client.properties:
 \`\`\`
 security.protocol=SASL_PLAINTEXT
@@ -447,31 +623,34 @@ sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule require
 
 Use with kafka tools:
 \`\`\`bash
-kafka-topics --list --bootstrap-server $PUBLIC_IP:9092 --command-config sasl-client.properties
+# SASL_PLAINTEXT on port 9093
+kafka-topics --list --bootstrap-server $PUBLIC_DNS:9093 --command-config sasl-client.properties
 \`\`\`
 
+Note: For SASL_SSL connections on port 9092, add SSL configuration and CA certificate to the properties file.
+
 ## Service Endpoints
-- **Control Center:** http://$PUBLIC_IP:9021
-- **Schema Registry:** http://$PUBLIC_IP:8081
-- **Kafka Connect:** http://$PUBLIC_IP:8083
-- **ksqlDB Server:** http://$PUBLIC_IP:8088
-- **REST Proxy:** http://$PUBLIC_IP:8082
+- **Control Center:** http://$PUBLIC_DNS:9021
+- **Schema Registry:** http://$PUBLIC_DNS:8081
+- **Kafka Connect:** http://$PUBLIC_DNS:8083
+- **ksqlDB Server:** http://$PUBLIC_DNS:8088
+- **REST Proxy:** http://$PUBLIC_DNS:8082
 CONNEOF
 
-# Create Python test script with correct IP
+# Create Python test script for SASL_PLAINTEXT (port 9093)
 cat > /opt/confluent/test_kafka_sasl.py <<PYTEST_EOF
 #!/usr/bin/env python3
 """
-Test Kafka SASL/PLAIN connection from external client
+Test Kafka SASL/PLAINTEXT connection from external client (port 9093)
 """
 from confluent_kafka import Producer, Consumer, KafkaError
 from confluent_kafka.admin import AdminClient
 import json
 import sys
 
-# Kafka configuration
+# Kafka configuration - SASL_PLAINTEXT on port 9093 (fallback, no encryption)
 config = {
-    'bootstrap.servers': '$PUBLIC_IP:9092',
+    'bootstrap.servers': '$PUBLIC_DNS:9093',
     'security.protocol': 'SASL_PLAINTEXT',
     'sasl.mechanism': 'PLAIN',
     'sasl.username': '${sasl_username}',
@@ -479,7 +658,7 @@ config = {
 }
 
 print("================================================================================")
-print("Testing Kafka SASL/PLAIN Connection from External Client")
+print("Testing Kafka SASL/PLAINTEXT Connection from External Client")
 print("================================================================================")
 print()
 print("Configuration:")
@@ -487,6 +666,9 @@ print(f"  Bootstrap Server: {config['bootstrap.servers']}")
 print(f"  Security Protocol: {config['security.protocol']}")
 print(f"  SASL Mechanism: {config['sasl.mechanism']}")
 print(f"  Username: {config['sasl.username']}")
+print()
+print("NOTE: This tests the SASL_PLAINTEXT port (9093) without TLS encryption.")
+print("      For production, use SASL_SSL on port 9092 with TLS encryption and CA cert.")
 print()
 
 # Test 1: Admin Client - List Topics
