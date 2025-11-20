@@ -54,8 +54,125 @@ fi
 print_success "terraform.tfvars found"
 echo ""
 
-# Check for SSH key configuration
-print_info "Checking SSH key configuration..."
+# Check AWS region
+print_info "Detecting AWS region..."
+DETECTED_REGION=""
+
+# Check environment variables first
+if [ -n "$AWS_REGION" ]; then
+    DETECTED_REGION="$AWS_REGION"
+elif [ -n "$AWS_DEFAULT_REGION" ]; then
+    DETECTED_REGION="$AWS_DEFAULT_REGION"
+# Check terraform.tfvars (only uncommented lines)
+elif grep -q "^[^#]*aws_region\s*=\s*\".\+\"" terraform.tfvars 2>/dev/null; then
+    DETECTED_REGION=$(grep "^[^#]*aws_region" terraform.tfvars | sed 's/.*= *"\(.*\)"/\1/' | head -1)
+# Check AWS CLI configuration
+elif command -v aws &> /dev/null; then
+    DETECTED_REGION=$(aws configure get region 2>/dev/null)
+fi
+
+if [ -n "$DETECTED_REGION" ]; then
+    print_success "AWS region: $DETECTED_REGION"
+else
+    print_warning "AWS region not detected, using default"
+fi
+echo ""
+
+# Check for key pair configuration in terraform.tfvars
+KEY_PAIR_CONFIGURED=false
+CONFIGURED_KEY=""
+
+if grep -q "^[^#]*key_pair_name\s*=\s*\".\+\"" terraform.tfvars 2>/dev/null; then
+    CONFIGURED_KEY=$(grep "^[^#]*key_pair_name" terraform.tfvars | sed 's/.*= *"\(.*\)"/\1/' | head -1)
+    if [ -n "$CONFIGURED_KEY" ] && [ "$CONFIGURED_KEY" != "YOUR_KEY_PAIR_NAME" ]; then
+        print_success "EC2 Key Pair already configured: $CONFIGURED_KEY"
+        KEY_PAIR_CONFIGURED=true
+    fi
+fi
+
+# If not configured, try to auto-detect
+if [ "$KEY_PAIR_CONFIGURED" = false ]; then
+    print_warning "EC2 Key Pair not configured in terraform.tfvars"
+    echo ""
+
+    # List available key pairs if AWS CLI is available
+    if command -v aws &> /dev/null && [ -n "$DETECTED_REGION" ]; then
+        print_info "Fetching available key pairs from AWS..."
+
+        KEY_PAIRS=()
+        while IFS= read -r line; do
+            [ -n "$line" ] && KEY_PAIRS+=("$line")
+        done < <(aws ec2 describe-key-pairs --region "$DETECTED_REGION" --query 'KeyPairs[*].KeyName' --output text 2>/dev/null | tr '\t' '\n')
+
+        if [ ${#KEY_PAIRS[@]} -gt 0 ]; then
+            echo ""
+            echo "Available key pairs in region $DETECTED_REGION:"
+            echo "=========================================="
+            for i in "${!KEY_PAIRS[@]}"; do
+                printf "  %2d. %s\n" $((i+1)) "${KEY_PAIRS[$i]}"
+            done
+            echo "=========================================="
+            echo ""
+
+            echo "Options:"
+            echo "  1-${#KEY_PAIRS[@]}. Select a key pair by number"
+            echo "  0. Enter a key pair name manually"
+            echo "  s. Skip SSH configuration (manual setup required)"
+            echo ""
+            read -p "Enter your choice: " key_choice
+
+            if [ "$key_choice" = "s" ] || [ "$key_choice" = "S" ]; then
+                print_warning "Skipping SSH key pair configuration"
+                MANUAL_MODE=true
+            elif [ "$key_choice" = "0" ]; then
+                echo ""
+                read -p "Enter your EC2 key pair name: " CONFIGURED_KEY
+
+                if [ -z "$CONFIGURED_KEY" ]; then
+                    print_error "Key pair name cannot be empty"
+                    exit 1
+                fi
+
+                # Update terraform.tfvars
+                sed -i.bak "s/^# *key_pair_name.*$/key_pair_name = \"$CONFIGURED_KEY\"/" terraform.tfvars
+                print_success "Updated terraform.tfvars with key pair: $CONFIGURED_KEY"
+                KEY_PAIR_CONFIGURED=true
+            elif [[ "$key_choice" =~ ^[0-9]+$ ]] && [ "$key_choice" -ge 1 ] && [ "$key_choice" -le ${#KEY_PAIRS[@]} ]; then
+                CONFIGURED_KEY="${KEY_PAIRS[$((key_choice-1))]}"
+
+                # Update terraform.tfvars
+                sed -i.bak "s/^# *key_pair_name.*$/key_pair_name = \"$CONFIGURED_KEY\"/" terraform.tfvars
+                print_success "Updated terraform.tfvars with key pair: $CONFIGURED_KEY"
+                KEY_PAIR_CONFIGURED=true
+            else
+                print_error "Invalid choice"
+                exit 1
+            fi
+        else
+            print_warning "No key pairs found in region $DETECTED_REGION"
+            print_info "You can create one in AWS Console or continue without SSH access"
+            read -p "Continue without SSH key? (y/N) " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 1
+            fi
+            MANUAL_MODE=true
+        fi
+    else
+        print_warning "Cannot auto-detect key pairs (AWS CLI not available or region not set)"
+        read -p "Continue without SSH key? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+        MANUAL_MODE=true
+    fi
+fi
+
+echo ""
+
+# Check for SSH private key configuration
+print_info "Checking SSH private key configuration..."
 SSH_KEY_PATH=""
 
 # Method 1: Check terraform.tfvars (only uncommented lines)
@@ -72,24 +189,55 @@ if [ -z "$SSH_KEY_PATH" ] && [ -n "$SSH_KEY" ]; then
     SSH_KEY_PATH="$SSH_KEY"
 fi
 
+# Method 3: Try to infer from key pair name
+if [ -z "$SSH_KEY_PATH" ] && [ -n "$CONFIGURED_KEY" ]; then
+    # Try common locations
+    POSSIBLE_PATHS=(
+        "$HOME/.ssh/${CONFIGURED_KEY}.pem"
+        "$HOME/.ssh/${CONFIGURED_KEY}"
+        "$HOME/Downloads/${CONFIGURED_KEY}.pem"
+    )
+
+    for path in "${POSSIBLE_PATHS[@]}"; do
+        if [ -f "$path" ]; then
+            SSH_KEY_PATH="$path"
+            print_info "Found SSH key at: $SSH_KEY_PATH"
+
+            # Ask if they want to use it
+            read -p "Use this key file? (Y/n) " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                # Update terraform.tfvars
+                sed -i.bak "s|^# *ssh_private_key.*$|ssh_private_key = \"$path\"|" terraform.tfvars
+                print_success "Updated terraform.tfvars with SSH key path"
+                break
+            else
+                SSH_KEY_PATH=""
+            fi
+        fi
+    done
+fi
+
 # Determine mode
 if [ -z "$SSH_KEY_PATH" ]; then
-    print_warning "No SSH key configured"
-    echo ""
-    echo "You have three options:"
-    echo ""
-    echo "  1. Add to terraform.tfvars (recommended):"
-    echo "     ssh_private_key = \"~/.ssh/your-key.pem\""
-    echo ""
-    echo "  2. Use environment variable:"
-    echo "     SSH_KEY=~/.ssh/your-key.pem $0"
-    echo ""
-    echo "  3. Continue without SSH key (manual configuration required)"
-    echo ""
-    read -p "Continue without SSH key? (y/N) " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    if [ "$KEY_PAIR_CONFIGURED" = true ]; then
+        print_warning "SSH private key not configured"
+        echo ""
+        echo "You have three options:"
+        echo ""
+        echo "  1. Add to terraform.tfvars:"
+        echo "     ssh_private_key = \"~/.ssh/${CONFIGURED_KEY}.pem\""
+        echo ""
+        echo "  2. Use environment variable:"
+        echo "     SSH_KEY=~/.ssh/${CONFIGURED_KEY}.pem $0"
+        echo ""
+        echo "  3. Continue without SSH key (manual configuration required)"
+        echo ""
+        read -p "Continue without SSH key? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
     MANUAL_MODE=true
     print_info "Continuing in manual mode"
@@ -100,7 +248,7 @@ else
         exit 1
     fi
     MANUAL_MODE=false
-    print_success "SSH key configured: $SSH_KEY_PATH"
+    print_success "SSH private key configured: $SSH_KEY_PATH"
 fi
 
 echo ""
