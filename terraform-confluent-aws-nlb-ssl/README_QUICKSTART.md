@@ -9,24 +9,38 @@
 
 ## One-Command Deployment
 
-### With SSH Key (Recommended - Fully Automated)
+### Method 1: Configure in terraform.tfvars (Recommended)
+
+```bash
+# 1. Copy example config
+cp terraform.tfvars.example terraform.tfvars
+
+# 2. Edit terraform.tfvars - uncomment and set:
+#    key_pair_name = "your-key-pair"
+#    ssh_private_key = "~/.ssh/your-key.pem"
+
+# 3. Deploy (fully automated)
+./deploy-complete.sh
+```
+
+### Method 2: Use Environment Variable
 
 ```bash
 # Set SSH key and deploy
 SSH_KEY=~/.ssh/your-key.pem ./deploy-complete.sh
 ```
 
-This will:
+Both methods will:
 - ✅ Generate certificates
 - ✅ Deploy all infrastructure
 - ✅ Update Kafka advertised listener with NLB DNS
 - ✅ Restart Kafka automatically
 - ✅ Ready to use!
 
-### Without SSH Key (Manual Configuration)
+### Method 3: Manual Configuration
 
 ```bash
-# Deploy infrastructure only
+# Deploy infrastructure only (no SSH key)
 ./deploy-complete.sh
 
 # Follow the manual configuration instructions shown
@@ -96,9 +110,12 @@ Edit `terraform.tfvars`:
 aws_region           = "ap-northeast-2"
 instance_name        = "confluent-server"
 key_pair_name        = "your-key-pair"
+ssh_private_key      = "~/.ssh/your-key.pem"  # For automated setup
 kafka_sasl_username  = "admin"
 kafka_sasl_password  = "admin-secret"
 ```
+
+**Important**: `ssh_private_key` enables automatic advertised listener configuration!
 
 ## Troubleshooting
 

@@ -13,6 +13,10 @@ ebs_volume_size = 100
 # Uncomment and set your key pair name for SSH access
 # key_pair_name = "my-key-pair"
 
+# SSH Private Key Path (for automated advertised listener update)
+# Uncomment to enable automatic Kafka configuration after deployment
+# ssh_private_key = "~/.ssh/my-key-pair.pem"
+
 # Network Configuration
 # CIDR blocks allowed to access Confluent Platform
 # Default allows access from anywhere - restrict this in production!

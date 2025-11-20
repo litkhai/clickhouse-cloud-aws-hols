@@ -6,16 +6,42 @@ echo "Complete NLB SSL Deployment with Advertised Listener Fix"
 echo "=========================================="
 echo ""
 
-# Check if SSH key is provided
-if [ -z "$SSH_KEY" ]; then
-    echo "⚠️  SSH_KEY environment variable not set"
+# Check if terraform.tfvars exists
+if [ ! -f "terraform.tfvars" ]; then
+    echo "❌ terraform.tfvars not found!"
+    echo ""
+    echo "Please create terraform.tfvars first:"
+    echo "  cp terraform.tfvars.example terraform.tfvars"
+    echo "  # Edit terraform.tfvars with your settings"
+    echo ""
+    exit 1
+fi
+
+# Check if SSH key is configured in terraform.tfvars
+SSH_KEY_FROM_TF=$(grep -E "^ssh_private_key" terraform.tfvars | sed 's/.*= *"\(.*\)"/\1/' || echo "")
+
+# Also check environment variable for backward compatibility
+if [ -n "$SSH_KEY" ]; then
+    SSH_KEY_PATH="$SSH_KEY"
+elif [ -n "$SSH_KEY_FROM_TF" ]; then
+    # Expand tilde
+    SSH_KEY_PATH="${SSH_KEY_FROM_TF/#\~/$HOME}"
+else
+    SSH_KEY_PATH=""
+fi
+
+if [ -z "$SSH_KEY_PATH" ]; then
+    echo "⚠️  No SSH key configured"
     echo ""
     echo "You have two options:"
     echo ""
-    echo "Option 1: Provide SSH key for automatic configuration"
+    echo "Option 1: Add to terraform.tfvars (recommended)"
+    echo "  ssh_private_key = \"~/.ssh/your-key.pem\""
+    echo ""
+    echo "Option 2: Use environment variable"
     echo "  SSH_KEY=~/.ssh/your-key.pem $0"
     echo ""
-    echo "Option 2: Continue without SSH key (manual configuration required)"
+    echo "Option 3: Continue without SSH key (manual configuration required)"
     read -p "Continue without SSH key? (y/N) " -n 1 -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -23,8 +49,13 @@ if [ -z "$SSH_KEY" ]; then
     fi
     MANUAL_MODE=true
 else
+    # Verify SSH key exists
+    if [ ! -f "$SSH_KEY_PATH" ]; then
+        echo "❌ SSH key not found: $SSH_KEY_PATH"
+        exit 1
+    fi
     MANUAL_MODE=false
-    echo "✓ SSH key configured: $SSH_KEY"
+    echo "✓ SSH key configured: $SSH_KEY_PATH"
     echo ""
 fi
 
@@ -101,11 +132,11 @@ else
 
     echo ""
     echo "Waiting for docker-compose.yml to be created..."
-    timeout 600 bash -c "until ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@${EC2_DNS} 'test -f /opt/confluent/docker-compose.yml' 2>/dev/null; do echo -n '.'; sleep 10; done" && echo " ✓"
+    timeout 600 bash -c "until ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@${EC2_DNS} 'test -f /opt/confluent/docker-compose.yml' 2>/dev/null; do echo -n '.'; sleep 10; done" && echo " ✓"
 
     echo ""
     echo "Updating advertised listener with NLB DNS..."
-    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ubuntu@${EC2_DNS} << EOF
+    ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=no ubuntu@${EC2_DNS} << EOF
         echo "Updating docker-compose.yml..."
         sudo sed -i 's/NLB_DNS_PLACEHOLDER/${NLB_DNS}/g' /opt/confluent/docker-compose.yml
 
