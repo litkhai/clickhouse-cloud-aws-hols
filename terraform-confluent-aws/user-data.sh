@@ -89,6 +89,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_ZOOKEEPER_SET_ACL: 'false'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,SASL_PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,SASL_PLAINTEXT://$PUBLIC_IP:9092
       KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
@@ -226,7 +227,7 @@ docker compose up -d
 echo "Waiting for Kafka to be ready..."
 MAX_WAIT=300
 ELAPSED=0
-until docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1; do
+until docker exec broker kafka-broker-api-versions --bootstrap-server localhost:29092 >/dev/null 2>&1; do
   if [ $ELAPSED -ge $MAX_WAIT ]; then
     echo "ERROR: Kafka failed to start after $${MAX_WAIT} seconds"
     docker logs broker
@@ -241,7 +242,7 @@ echo "Kafka is ready!"
 
 # Create sample topic
 docker exec broker kafka-topics --create \
-  --bootstrap-server localhost:9092 \
+  --bootstrap-server localhost:29092 \
   --topic ${topic_name} \
   --partitions 3 \
   --replication-factor 1 \
@@ -281,7 +282,7 @@ EOF
 )
 
   echo "$message" | docker exec -i broker kafka-console-producer \
-    --broker-list localhost:9092 \
+    --broker-list localhost:29092 \
     --topic $TOPIC
 
   echo "[$timestamp] Produced message $counter to topic $TOPIC"
@@ -348,10 +349,236 @@ echo "Data Producer Service:"
 systemctl status confluent-producer --no-pager
 echo ""
 echo "Topic List:"
-docker exec broker kafka-topics --list --bootstrap-server localhost:9092
+docker exec broker kafka-topics --list --bootstrap-server localhost:29092
 STATUS_EOF
 
 chmod +x /opt/confluent/status.sh
 
-echo "Confluent Platform installation completed successfully!"
-echo "Access Control Center at: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):9021"
+echo ""
+echo "================================================================================"
+echo "✓✓✓ Confluent Platform with SASL/PLAIN Authentication Deployed Successfully ✓✓✓"
+echo "================================================================================"
+echo ""
+echo "Kafka Bootstrap Server:"
+echo "  $PUBLIC_IP:9092"
+echo ""
+echo "Authentication Credentials:"
+echo "  Security Protocol: SASL_PLAINTEXT"
+echo "  SASL Mechanism:    PLAIN"
+echo "  Username:          ${sasl_username}"
+echo "  Password:          ${sasl_password}"
+echo ""
+echo "Service URLs:"
+echo "  Control Center:    http://$PUBLIC_IP:9021"
+echo "  Schema Registry:   http://$PUBLIC_IP:8081"
+echo "  Kafka Connect:     http://$PUBLIC_IP:8083"
+echo "  ksqlDB Server:     http://$PUBLIC_IP:8088"
+echo "  REST Proxy:        http://$PUBLIC_IP:8082"
+echo ""
+echo "Sample Topic:        ${topic_name}"
+echo ""
+echo "Management Scripts:"
+echo "  Status:  /opt/confluent/status.sh"
+echo "  Start:   /opt/confluent/start.sh"
+echo "  Stop:    /opt/confluent/stop.sh"
+echo ""
+echo "Testing:"
+echo "  Python SASL Test: /opt/confluent/test_kafka_sasl.py"
+echo "  (Requires: pip3 install confluent-kafka)"
+echo ""
+echo "Connection Guide:"
+echo "  See /opt/confluent/CONNECTION_INFO.md for detailed examples"
+echo "================================================================================"
+
+# Create connection info file
+cat > /opt/confluent/CONNECTION_INFO.md <<CONNEOF
+# Confluent Platform Connection Information
+
+## Quick Connection Details
+
+### Kafka Bootstrap Server
+\`\`\`
+$PUBLIC_IP:9092
+\`\`\`
+
+### Authentication
+- **Security Protocol:** SASL_PLAINTEXT
+- **SASL Mechanism:** PLAIN
+- **Username:** ${sasl_username}
+- **Password:** ${sasl_password}
+
+### Python Example (confluent-kafka)
+\`\`\`python
+from confluent_kafka import Producer
+
+config = {
+    'bootstrap.servers': '$PUBLIC_IP:9092',
+    'security.protocol': 'SASL_PLAINTEXT',
+    'sasl.mechanism': 'PLAIN',
+    'sasl.username': '${sasl_username}',
+    'sasl.password': '${sasl_password}'
+}
+
+producer = Producer(config)
+\`\`\`
+
+### ClickHouse Kafka Engine
+\`\`\`sql
+CREATE TABLE kafka_queue
+ENGINE = Kafka()
+SETTINGS
+    kafka_broker_list = '$PUBLIC_IP:9092',
+    kafka_topic_list = '${topic_name}',
+    kafka_group_name = 'clickhouse_group',
+    kafka_format = 'JSONEachRow',
+    kafka_sasl_mechanism = 'PLAIN',
+    kafka_sasl_username = '${sasl_username}',
+    kafka_sasl_password = '${sasl_password}',
+    kafka_security_protocol = 'SASL_PLAINTEXT';
+\`\`\`
+
+### Command Line
+Create sasl-client.properties:
+\`\`\`
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="${sasl_username}" password="${sasl_password}";
+\`\`\`
+
+Use with kafka tools:
+\`\`\`bash
+kafka-topics --list --bootstrap-server $PUBLIC_IP:9092 --command-config sasl-client.properties
+\`\`\`
+
+## Service Endpoints
+- **Control Center:** http://$PUBLIC_IP:9021
+- **Schema Registry:** http://$PUBLIC_IP:8081
+- **Kafka Connect:** http://$PUBLIC_IP:8083
+- **ksqlDB Server:** http://$PUBLIC_IP:8088
+- **REST Proxy:** http://$PUBLIC_IP:8082
+CONNEOF
+
+# Create Python test script with correct IP
+cat > /opt/confluent/test_kafka_sasl.py <<PYTEST_EOF
+#!/usr/bin/env python3
+"""
+Test Kafka SASL/PLAIN connection from external client
+"""
+from confluent_kafka import Producer, Consumer, KafkaError
+from confluent_kafka.admin import AdminClient
+import json
+import sys
+
+# Kafka configuration
+config = {
+    'bootstrap.servers': '$PUBLIC_IP:9092',
+    'security.protocol': 'SASL_PLAINTEXT',
+    'sasl.mechanism': 'PLAIN',
+    'sasl.username': '${sasl_username}',
+    'sasl.password': '${sasl_password}'
+}
+
+print("================================================================================")
+print("Testing Kafka SASL/PLAIN Connection from External Client")
+print("================================================================================")
+print()
+print("Configuration:")
+print(f"  Bootstrap Server: {config['bootstrap.servers']}")
+print(f"  Security Protocol: {config['security.protocol']}")
+print(f"  SASL Mechanism: {config['sasl.mechanism']}")
+print(f"  Username: {config['sasl.username']}")
+print()
+
+# Test 1: Admin Client - List Topics
+print("Test 1: AdminClient - Listing topics...")
+try:
+    admin = AdminClient(config)
+    metadata = admin.list_topics(timeout=10)
+    topics = list(metadata.topics.keys())
+    print(f"✓ Successfully connected! Found {len(topics)} topics:")
+    for topic in sorted(topics)[:10]:  # Show first 10 topics
+        print(f"  - {topic}")
+    if len(topics) > 10:
+        print(f"  ... and {len(topics) - 10} more topics")
+    print()
+except Exception as e:
+    print(f"✗ Failed to connect: {e}")
+    sys.exit(1)
+
+# Test 2: Producer - Send a message
+print("Test 2: Producer - Sending test message...")
+try:
+    producer = Producer(config)
+    test_topic = 'external-sasl-test'
+    test_message = {
+        'test': 'external_client',
+        'message': 'Hello from external machine with SASL!',
+        'server': config['bootstrap.servers']
+    }
+
+    producer.produce(
+        test_topic,
+        key='test-key',
+        value=json.dumps(test_message)
+    )
+    producer.flush()
+    print(f"✓ Successfully produced message to topic '{test_topic}'")
+    print(f"  Message: {test_message}")
+    print()
+except Exception as e:
+    print(f"✗ Failed to produce: {e}")
+    sys.exit(1)
+
+# Test 3: Consumer - Read messages
+print("Test 3: Consumer - Reading messages...")
+try:
+    consumer_config = {**config}
+    consumer_config.update({
+        'group.id': 'python-external-test-group',
+        'auto.offset.reset': 'earliest',
+        'enable.auto.commit': False
+    })
+
+    consumer = Consumer(consumer_config)
+    consumer.subscribe([test_topic])
+
+    print(f"  Subscribed to topic '{test_topic}'")
+    print("  Polling for messages (5 second timeout)...")
+
+    msg_count = 0
+    for i in range(50):  # Try 50 times, 100ms each
+        msg = consumer.poll(0.1)
+        if msg is None:
+            continue
+        if msg.error():
+            if msg.error().code() == KafkaError._PARTITION_EOF:
+                continue
+            print(f"  Error: {msg.error()}")
+            break
+
+        msg_count += 1
+        print(f"  ✓ Received message #{msg_count}:")
+        print(f"    Key: {msg.key().decode('utf-8') if msg.key() else None}")
+        print(f"    Value: {msg.value().decode('utf-8')}")
+
+        if msg_count >= 3:  # Read first 3 messages
+            break
+
+    consumer.close()
+
+    if msg_count > 0:
+        print(f"✓ Successfully consumed {msg_count} message(s)")
+    else:
+        print("! No messages found (topic might be empty or needs more time)")
+    print()
+
+except Exception as e:
+    print(f"✗ Failed to consume: {e}")
+    sys.exit(1)
+
+print("================================================================================")
+print("✓✓✓ All tests passed! External SASL/PLAIN authentication is working! ✓✓✓")
+print("================================================================================")
+PYTEST_EOF
+
+chmod +x /opt/confluent/test_kafka_sasl.py

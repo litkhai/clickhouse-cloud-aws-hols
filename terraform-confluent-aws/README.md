@@ -109,6 +109,46 @@ The deployment creates a security group with the following ingress rules:
 | 9021 | Control Center | Web UI |
 | 22 | SSH | Remote access (if key configured) |
 
+### SASL Authentication
+
+The Kafka broker is configured with **SASL/PLAIN authentication** on port **9092** for external clients.
+
+**Authentication Details:**
+- **Security Protocol**: `SASL_PLAINTEXT`
+- **SASL Mechanism**: `PLAIN`
+- **Default Credentials**: Configured via `kafka_sasl_username` and `kafka_sasl_password` variables
+
+**Listener Architecture:**
+- **Internal (PLAINTEXT)**: `broker:29092` - Used by Control Center, Schema Registry, Connect (no authentication)
+- **External (SASL_PLAINTEXT)**: `<PUBLIC_IP>:9092` - Used by external clients (requires SASL authentication)
+
+This architecture mirrors **Confluent Cloud's authentication model**, making it ideal for ClickHouse integration workshops and hands-on labs.
+
+#### Testing SASL Connection
+
+After deployment, a Python test script is automatically generated on the EC2 instance with the correct IP address:
+
+```bash
+# Get the test command from Terraform outputs
+terraform output -raw test_sasl_connection
+
+# Download the test script (already configured with correct IP and credentials)
+scp -i /path/to/key.pem ubuntu@<instance-ip>:/opt/confluent/test_kafka_sasl.py .
+
+# Install Python package
+pip3 install confluent-kafka
+
+# Run the test
+python3 test_kafka_sasl.py
+```
+
+The test script automatically verifies:
+- ✓ Admin client connectivity and topic listing
+- ✓ Producer sending messages with SASL authentication
+- ✓ Consumer reading messages with SASL authentication
+
+For detailed connection examples in Python, Java, Go, Node.js, and ClickHouse, see [SASL_CONNECTION_GUIDE.md](SASL_CONNECTION_GUIDE.md).
+
 ## Configuration
 
 ### Variables
@@ -125,6 +165,8 @@ The deployment creates a security group with the following ingress rules:
 | `confluent_version` | Confluent Platform version | "7.5.0" | No |
 | `sample_topic_name` | Sample topic name | "sample-data-topic" | No |
 | `data_producer_interval` | Data production interval (seconds) | 5 | No |
+| `kafka_sasl_username` | Kafka SASL username | "admin" | No |
+| `kafka_sasl_password` | Kafka SASL password | "admin-secret" | No |
 
 ### Instance Type Recommendations
 

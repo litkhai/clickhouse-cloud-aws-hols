@@ -151,13 +151,13 @@ resource "aws_instance" "confluent" {
     }
   }
 
-  user_data = templatefile("${path.module}/user-data.sh", {
+  user_data = base64gzip(templatefile("${path.module}/user-data.sh", {
     topic_name        = var.sample_topic_name
     data_interval     = var.data_producer_interval
     confluent_version = var.confluent_version
     sasl_username     = var.kafka_sasl_username
     sasl_password     = var.kafka_sasl_password
-  })
+  }))
 
   tags = {
     Name = var.instance_name
