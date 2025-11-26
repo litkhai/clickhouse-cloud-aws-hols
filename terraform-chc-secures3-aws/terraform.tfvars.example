@@ -1,0 +1,36 @@
+# AWS Region Configuration
+# Leave commented to use AWS_REGION or AWS_DEFAULT_REGION environment variable
+# Uncomment and set to override
+# aws_region = "ap-northeast-2"
+
+# S3 Bucket Configuration
+# REQUIRED: Must be globally unique across all AWS accounts
+bucket_name = "my-clickhouse-data-bucket-unique-name"
+
+# IAM Role Configuration
+# REQUIRED: ClickHouse Cloud service IAM role ARN(s)
+# To find this:
+# 1. Log into ClickHouse Cloud Console
+# 2. Select your service
+# 3. Go to Settings → Network security information
+# 4. Copy the "Service role ID (IAM)" value
+# Format: arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx
+clickhouse_iam_role_arns = [
+  "arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx"
+]
+
+# IAM Role Name (Optional)
+# Name of the IAM role to create for ClickHouse access
+iam_role_name = "ClickHouseS3Access"
+
+# Environment Tag (Optional)
+environment = "dev"
+
+# S3 Bucket Features (Optional)
+enable_versioning      = true
+create_sample_folders  = true
+
+# External ID for additional security (Optional)
+# Uncomment if you want to use external ID for extra security
+# require_external_id = true
+# external_id = "your-shared-secret-here"
