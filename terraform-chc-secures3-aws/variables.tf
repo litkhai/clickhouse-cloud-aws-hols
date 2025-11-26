@@ -59,15 +59,10 @@ variable "require_external_id" {
 }
 
 variable "external_id" {
-  description = "External ID for additional security (shared secret between ClickHouse and AWS)"
+  description = "External ID for additional security (shared secret between ClickHouse and AWS). Only used when require_external_id is true."
   type        = string
   default     = ""
   sensitive   = true
-
-  validation {
-    condition     = var.require_external_id == false || (var.require_external_id == true && length(var.external_id) > 0)
-    error_message = "External ID must be provided when require_external_id is true."
-  }
 }
 
 variable "create_sample_folders" {

@@ -19,6 +19,15 @@ provider "aws" {
   # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
 }
 
+# Validation: Check that external_id is provided when require_external_id is true
+locals {
+  validate_external_id = (
+    var.require_external_id && var.external_id == "" ?
+    tobool("ERROR: external_id must be provided when require_external_id is true") :
+    true
+  )
+}
+
 # S3 Bucket for ClickHouse data
 resource "aws_s3_bucket" "clickhouse_data" {
   bucket = var.bucket_name

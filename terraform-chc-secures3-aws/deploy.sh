@@ -227,11 +227,11 @@ if [ "$IAM_ROLE_CONFIGURED" = false ]; then
     print_warning "ClickHouse IAM role ARN not configured"
     echo ""
     echo "To get your ClickHouse IAM role ARN:"
-    echo "  ${BLUE}1.${NC} Log into ClickHouse Cloud Console: ${GREEN}https://clickhouse.cloud/${NC}"
-    echo "  ${BLUE}2.${NC} Select your service"
-    echo "  ${BLUE}3.${NC} Navigate to: ${YELLOW}Settings → Network security information${NC}"
-    echo "  ${BLUE}4.${NC} Copy the ${YELLOW}'Service role ID (IAM)'${NC} value"
-    echo "     Format: ${GREEN}arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx${NC}"
+    echo -e "  ${BLUE}1.${NC} Log into ClickHouse Cloud Console: ${GREEN}https://clickhouse.cloud/${NC}"
+    echo -e "  ${BLUE}2.${NC} Select your service"
+    echo -e "  ${BLUE}3.${NC} Navigate to: ${YELLOW}Settings → Network security information${NC}"
+    echo -e "  ${BLUE}4.${NC} Copy the ${YELLOW}'Service role ID (IAM)'${NC} value"
+    echo -e "     Format: ${GREEN}arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx${NC}"
     echo ""
 
     read -p "Do you have your ClickHouse IAM role ARN? (y/n) " has_arn
@@ -257,18 +257,24 @@ if [ "$IAM_ROLE_CONFIGURED" = false ]; then
     fi
 
     # Update terraform.tfvars
-    if grep -q "^clickhouse_iam_role_arns" terraform.tfvars; then
-        sed -i.bak "s|^clickhouse_iam_role_arns.*|clickhouse_iam_role_arns = [\n  \"$clickhouse_arn\"\n]|" terraform.tfvars
-    elif grep -q "^# clickhouse_iam_role_arns" terraform.tfvars; then
-        sed -i.bak "s|^# clickhouse_iam_role_arns.*|clickhouse_iam_role_arns = [\n  \"$clickhouse_arn\"\n]|" terraform.tfvars
-    else
-        # Add to file if not present
-        echo "" >> terraform.tfvars
-        echo "clickhouse_iam_role_arns = [" >> terraform.tfvars
-        echo "  \"$clickhouse_arn\"" >> terraform.tfvars
-        echo "]" >> terraform.tfvars
+    # Remove old clickhouse_iam_role_arns lines (including array contents)
+    if grep -q "^clickhouse_iam_role_arns" terraform.tfvars || grep -q "^# clickhouse_iam_role_arns" terraform.tfvars; then
+        # Create temp file without clickhouse_iam_role_arns section
+        awk '
+        /^clickhouse_iam_role_arns/ { skip=1; next }
+        /^# clickhouse_iam_role_arns/ { skip=1; next }
+        skip && /^\]/ { skip=0; next }
+        skip && /^  "arn:/ { next }
+        !skip { print }
+        ' terraform.tfvars > terraform.tfvars.tmp
+        mv terraform.tfvars.tmp terraform.tfvars
     fi
-    rm -f terraform.tfvars.bak
+
+    # Add new clickhouse_iam_role_arns configuration
+    echo "" >> terraform.tfvars
+    echo "clickhouse_iam_role_arns = [" >> terraform.tfvars
+    echo "  \"$clickhouse_arn\"" >> terraform.tfvars
+    echo "]" >> terraform.tfvars
 
     print_success "ClickHouse IAM role ARN configured"
     IAM_ROLE_CONFIGURED=true
@@ -410,16 +416,16 @@ echo ""
 
 print_info "Next Steps:"
 echo ""
-echo "1. ${GREEN}Test the S3 integration:${NC}"
+echo -e "1. ${GREEN}Test the S3 integration:${NC}"
 echo "   ./test-s3-integration.sh"
 echo ""
-echo "2. ${GREEN}Connect to ClickHouse Cloud and run SQL:${NC}"
+echo -e "2. ${GREEN}Connect to ClickHouse Cloud and run SQL:${NC}"
 echo "   terraform output clickhouse_sql_examples"
 echo ""
-echo "3. ${GREEN}View complete connection information:${NC}"
+echo -e "3. ${GREEN}View complete connection information:${NC}"
 echo "   terraform output connection_info"
 echo ""
-echo "4. ${GREEN}View setup checklist:${NC}"
+echo -e "4. ${GREEN}View setup checklist:${NC}"
 echo "   terraform output setup_checklist"
 echo ""
 
