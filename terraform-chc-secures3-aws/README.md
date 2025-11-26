@@ -58,9 +58,25 @@ export AWS_REGION="ap-northeast-2"  # Optional: Set default region
 
 ## Quick Start
 
-### 1. Get ClickHouse Cloud IAM Role ARN
+### Option A: Automated Deployment (Recommended)
 
-Before running Terraform, you need to get your ClickHouse Cloud service's IAM role ARN:
+The easiest way to deploy is using the automated deployment script:
+
+```bash
+cd terraform-chc-secures3-aws
+./deploy.sh
+```
+
+The script will:
+1. ✅ Check AWS credentials automatically
+2. ✅ Auto-detect AWS region
+3. ✅ Auto-generate a unique S3 bucket name (or let you customize it)
+4. ✅ Prompt for your ClickHouse Cloud IAM role ARN
+5. ✅ Validate the configuration
+6. ✅ Deploy the infrastructure
+7. ✅ Display connection information
+
+**Before running the script**, get your ClickHouse Cloud IAM role ARN:
 
 1. Log into [ClickHouse Cloud Console](https://clickhouse.cloud/)
 2. Select your service
@@ -68,22 +84,32 @@ Before running Terraform, you need to get your ClickHouse Cloud service's IAM ro
 4. Copy the **Service role ID (IAM)** value
    - Format: `arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx`
 
-### 2. Configure Variables
+Then just run:
 
-Copy the example configuration:
+```bash
+./deploy.sh
+```
+
+The script will guide you through the rest!
+
+### Option B: Manual Deployment
+
+If you prefer manual configuration:
+
+#### 1. Copy the example configuration:
 
 ```bash
 cd terraform-chc-secures3-aws
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` with your configuration:
+#### 2. Edit `terraform.tfvars`:
 
 ```hcl
 # REQUIRED: Set a globally unique bucket name
 bucket_name = "my-company-clickhouse-data-2024"
 
-# REQUIRED: Paste your ClickHouse Cloud IAM role ARN from step 1
+# REQUIRED: Paste your ClickHouse Cloud IAM role ARN
 clickhouse_iam_role_arns = [
   "arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx"
 ]
@@ -94,7 +120,7 @@ iam_role_name = "ClickHouseS3Access"
 environment = "production"
 ```
 
-### 3. Deploy
+#### 3. Deploy:
 
 ```bash
 # Initialize Terraform
@@ -109,7 +135,7 @@ terraform apply
 
 The deployment takes about 1-2 minutes.
 
-### 4. Get Connection Information
+### Get Connection Information
 
 After deployment, view the connection details:
 
