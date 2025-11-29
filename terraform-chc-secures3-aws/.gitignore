@@ -13,6 +13,7 @@ crash.*.log
 # Generated files
 test_s3_queries.sql
 example_*.sql
+deployment-info.txt
 
 # OS files
 .DS_Store
