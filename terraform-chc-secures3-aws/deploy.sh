@@ -151,11 +151,19 @@ if grep -q "^bucket_name\s*=\s*\".\+\"" terraform.tfvars 2>/dev/null; then
     CONFIGURED_BUCKET=$(grep "^bucket_name" terraform.tfvars | cut -d'"' -f2)
     if [ "$CONFIGURED_BUCKET" != "my-clickhouse-data-bucket-unique-name" ] && [ -n "$CONFIGURED_BUCKET" ]; then
         print_success "S3 bucket name already configured: $CONFIGURED_BUCKET"
-        BUCKET_CONFIGURED=true
+        echo ""
+        read -p "Do you want to change the bucket name? (y/n): " change_bucket
+
+        if [[ ! $change_bucket =~ ^[Yy]$ ]]; then
+            BUCKET_CONFIGURED=true
+        else
+            print_info "Reconfiguring S3 bucket name..."
+            BUCKET_CONFIGURED=false
+        fi
     fi
 fi
 
-# Auto-configure bucket name if not configured
+# Configure bucket name if not configured or user wants to change
 if [ "$BUCKET_CONFIGURED" = false ]; then
     print_info "Configuring S3 bucket name..."
     echo ""
