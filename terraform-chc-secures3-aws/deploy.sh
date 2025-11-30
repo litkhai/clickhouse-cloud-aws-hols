@@ -164,7 +164,7 @@ if grep -q "^bucket_name\s*=\s*\".\+\"" terraform.tfvars 2>/dev/null; then
 fi
 
 # Configure bucket name if not configured or user wants to change
-if [ "$BUCKET_CONFIGURED" = false ]; then
+while [ "$BUCKET_CONFIGURED" = false ]; do
     print_info "Configuring S3 bucket name..."
     echo ""
     echo "Enter a bucket name prefix (leave empty to use default 'clickhouse-s3'):"
@@ -210,11 +210,41 @@ if [ "$BUCKET_CONFIGURED" = false ]; then
             # Validate length
             if [ ${#CONFIGURED_BUCKET} -lt 3 ] || [ ${#CONFIGURED_BUCKET} -gt 63 ]; then
                 print_error "Bucket name must be between 3 and 63 characters"
-                exit 1
+                echo ""
+                continue  # Go back to start of loop
             fi
         else
             print_error "Bucket name cannot be empty"
-            exit 1
+            echo ""
+            continue  # Go back to start of loop
+        fi
+    fi
+
+    # Check if bucket already exists (if AWS CLI is available)
+    if command -v aws &> /dev/null && [ -n "$DETECTED_REGION" ]; then
+        print_info "Checking if S3 bucket exists..."
+
+        if aws s3 ls "s3://${CONFIGURED_BUCKET}" --region "$DETECTED_REGION" 2>/dev/null; then
+            print_warning "⚠️  S3 bucket '$CONFIGURED_BUCKET' already exists!"
+            echo ""
+            echo "This bucket might be:"
+            echo "  • Owned by your AWS account (will be reused)"
+            echo "  • Owned by another AWS account (deployment will fail)"
+            echo ""
+            read -p "Continue with this bucket name? (y/n): " continue_with_bucket
+
+            if [[ ! $continue_with_bucket =~ ^[Yy]$ ]]; then
+                print_info "Please choose a different bucket name"
+                echo ""
+                # Continue loop to choose new name
+                continue
+            else
+                print_info "Will attempt to use existing bucket (must be in your account)"
+                echo ""
+            fi
+        else
+            print_success "✓ S3 bucket name is available"
+            echo ""
         fi
     fi
 
@@ -232,8 +262,8 @@ if [ "$BUCKET_CONFIGURED" = false ]; then
 
     print_success "Bucket name configured: $CONFIGURED_BUCKET"
     BUCKET_CONFIGURED=true
-    echo ""
-fi
+done
+echo ""
 
 # Load ClickHouse IAM ARN from .env if it exists
 ENV_FILE=".env"
@@ -353,20 +383,6 @@ echo ""
 print_success "Configuration is complete!"
 print_info "Configuration saved to terraform.tfvars"
 echo ""
-
-# Validate bucket name with AWS if possible
-if [ "$BUCKET_CONFIGURED" = true ] && command -v aws &> /dev/null && [ -n "$DETECTED_REGION" ]; then
-    print_info "Checking if S3 bucket name is available..."
-
-    # Check if bucket already exists
-    if aws s3 ls "s3://${CONFIGURED_BUCKET}" --region "$DETECTED_REGION" 2>/dev/null; then
-        print_warning "S3 bucket '$CONFIGURED_BUCKET' already exists"
-        print_info "Terraform will use the existing bucket if it's in this account"
-    else
-        print_success "S3 bucket name appears to be available"
-    fi
-    echo ""
-fi
 
 # Initialize Terraform
 print_info "Initializing Terraform..."
