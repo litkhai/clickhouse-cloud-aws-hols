@@ -155,45 +155,58 @@ if grep -q "^bucket_name\s*=\s*\".\+\"" terraform.tfvars 2>/dev/null; then
     fi
 fi
 
-# Auto-generate bucket name if not configured
+# Auto-configure bucket name if not configured
 if [ "$BUCKET_CONFIGURED" = false ]; then
-    print_info "Auto-configuring S3 bucket name..."
+    print_info "Configuring S3 bucket name..."
+    echo ""
+    echo "Enter a bucket name prefix (leave empty to use default 'clickhouse-s3'):"
+    read -p "Bucket prefix: " bucket_prefix
 
-    # Generate unique bucket name using AWS account ID and timestamp
-    if [ -n "$ACCOUNT_ID" ]; then
-        GENERATED_BUCKET="clickhouse-s3-${ACCOUNT_ID}-$(date +%Y%m%d-%H%M%S)"
-    else
-        # Fallback if account ID not available
-        GENERATED_BUCKET="clickhouse-s3-$(whoami)-$(date +%Y%m%d-%H%M%S)"
+    # Set default prefix if empty
+    if [ -z "$bucket_prefix" ]; then
+        bucket_prefix="clickhouse-s3"
     fi
 
-    # Convert to lowercase and remove invalid characters
-    GENERATED_BUCKET=$(echo "$GENERATED_BUCKET" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+    # Sanitize prefix
+    bucket_prefix=$(echo "$bucket_prefix" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+
+    # Generate random hash (8 characters)
+    RANDOM_HASH=$(openssl rand -hex 4)
+
+    # Generate bucket name with prefix and random hash
+    GENERATED_BUCKET="${bucket_prefix}-${RANDOM_HASH}"
+
+    # Ensure bucket name is valid length (3-63 characters)
+    if [ ${#GENERATED_BUCKET} -gt 63 ]; then
+        print_warning "Bucket name too long, truncating..."
+        GENERATED_BUCKET="${GENERATED_BUCKET:0:63}"
+    fi
 
     print_success "Generated bucket name: $GENERATED_BUCKET"
-
     echo ""
-    read -p "Use this bucket name? (y/n) or enter custom name: " bucket_choice
 
-    if [[ $bucket_choice =~ ^[Yy]$ ]]; then
+    read -p "Use this bucket name? (y/n): " use_generated
+
+    if [[ $use_generated =~ ^[Yy]$ ]]; then
         CONFIGURED_BUCKET="$GENERATED_BUCKET"
-    elif [[ $bucket_choice =~ ^[Nn]$ ]]; then
-        read -p "Enter your custom S3 bucket name: " custom_bucket
+    else
+        echo ""
+        read -p "Enter your full bucket name: " custom_bucket
         if [ -n "$custom_bucket" ]; then
             # Validate and sanitize bucket name
             CONFIGURED_BUCKET=$(echo "$custom_bucket" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
             if [ "$CONFIGURED_BUCKET" != "$custom_bucket" ]; then
                 print_warning "Bucket name sanitized to: $CONFIGURED_BUCKET"
             fi
+
+            # Validate length
+            if [ ${#CONFIGURED_BUCKET} -lt 3 ] || [ ${#CONFIGURED_BUCKET} -gt 63 ]; then
+                print_error "Bucket name must be between 3 and 63 characters"
+                exit 1
+            fi
         else
             print_error "Bucket name cannot be empty"
             exit 1
-        fi
-    else
-        # User entered a custom name directly
-        CONFIGURED_BUCKET=$(echo "$bucket_choice" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')
-        if [ "$CONFIGURED_BUCKET" != "$bucket_choice" ]; then
-            print_warning "Bucket name sanitized to: $CONFIGURED_BUCKET"
         fi
     fi
 
@@ -214,36 +227,78 @@ if [ "$BUCKET_CONFIGURED" = false ]; then
     echo ""
 fi
 
-# Check if ClickHouse IAM role is already configured
+# Load ClickHouse IAM ARN from .env if it exists
+ENV_FILE=".env"
+SAVED_CLICKHOUSE_ARN=""
+
+if [ -f "$ENV_FILE" ]; then
+    # Source .env file to get CLICKHOUSE_IAM_ROLE_ARN
+    if grep -q "^CLICKHOUSE_IAM_ROLE_ARN=" "$ENV_FILE"; then
+        SAVED_CLICKHOUSE_ARN=$(grep "^CLICKHOUSE_IAM_ROLE_ARN=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+        if [ -n "$SAVED_CLICKHOUSE_ARN" ]; then
+            print_success "Found saved ClickHouse IAM role ARN in .env"
+            echo "  ARN: $SAVED_CLICKHOUSE_ARN"
+            echo ""
+        fi
+    fi
+fi
+
+# Check if ClickHouse IAM role is already configured in terraform.tfvars
 if grep -q "^clickhouse_iam_role_arns\s*=\s*\[" terraform.tfvars 2>/dev/null; then
     if ! grep -q "123456789012:role/ClickHouseInstanceRole-xxxxx" terraform.tfvars; then
-        print_success "ClickHouse IAM role ARN(s) already configured"
+        print_success "ClickHouse IAM role ARN(s) already configured in terraform.tfvars"
         IAM_ROLE_CONFIGURED=true
     fi
 fi
 
 # Prompt for ClickHouse IAM role if not configured
 if [ "$IAM_ROLE_CONFIGURED" = false ]; then
-    print_warning "ClickHouse IAM role ARN not configured"
-    echo ""
-    echo "To get your ClickHouse IAM role ARN:"
-    echo -e "  ${BLUE}1.${NC} Log into ClickHouse Cloud Console: ${GREEN}https://clickhouse.cloud/${NC}"
-    echo -e "  ${BLUE}2.${NC} Select your service"
-    echo -e "  ${BLUE}3.${NC} Navigate to: ${YELLOW}Settings → Network security information${NC}"
-    echo -e "  ${BLUE}4.${NC} Copy the ${YELLOW}'Service role ID (IAM)'${NC} value"
-    echo -e "     Format: ${GREEN}arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx${NC}"
-    echo ""
+    # If we have a saved ARN, ask if user wants to reuse it
+    if [ -n "$SAVED_CLICKHOUSE_ARN" ]; then
+        echo ""
+        read -p "Use saved ClickHouse IAM role ARN from .env? (y/n): " use_saved
+        echo ""
 
-    read -p "Do you have your ClickHouse IAM role ARN? (y/n) " has_arn
+        if [[ $use_saved =~ ^[Yy]$ ]]; then
+            clickhouse_arn="$SAVED_CLICKHOUSE_ARN"
+            print_success "Using saved ARN"
+        else
+            # User wants to enter a new ARN
+            print_info "Enter a new ClickHouse IAM role ARN"
+            echo ""
+            echo "To get your ClickHouse IAM role ARN:"
+            echo -e "  ${BLUE}1.${NC} Log into ClickHouse Cloud Console: ${GREEN}https://clickhouse.cloud/${NC}"
+            echo -e "  ${BLUE}2.${NC} Select your service"
+            echo -e "  ${BLUE}3.${NC} Navigate to: ${YELLOW}Settings → Network security information${NC}"
+            echo -e "  ${BLUE}4.${NC} Copy the ${YELLOW}'Service role ID (IAM)'${NC} value"
+            echo -e "     Format: ${GREEN}arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx${NC}"
+            echo ""
 
-    if [[ ! $has_arn =~ ^[Yy]$ ]]; then
-        print_error "ClickHouse IAM role ARN is required to continue"
-        print_info "Please get your IAM role ARN from ClickHouse Cloud Console and run this script again"
-        exit 1
+            read -p "Enter your ClickHouse IAM role ARN: " clickhouse_arn
+        fi
+    else
+        # No saved ARN, prompt for new one
+        print_warning "ClickHouse IAM role ARN not configured"
+        echo ""
+        echo "To get your ClickHouse IAM role ARN:"
+        echo -e "  ${BLUE}1.${NC} Log into ClickHouse Cloud Console: ${GREEN}https://clickhouse.cloud/${NC}"
+        echo -e "  ${BLUE}2.${NC} Select your service"
+        echo -e "  ${BLUE}3.${NC} Navigate to: ${YELLOW}Settings → Network security information${NC}"
+        echo -e "  ${BLUE}4.${NC} Copy the ${YELLOW}'Service role ID (IAM)'${NC} value"
+        echo -e "     Format: ${GREEN}arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx${NC}"
+        echo ""
+
+        read -p "Do you have your ClickHouse IAM role ARN? (y/n) " has_arn
+
+        if [[ ! $has_arn =~ ^[Yy]$ ]]; then
+            print_error "ClickHouse IAM role ARN is required to continue"
+            print_info "Please get your IAM role ARN from ClickHouse Cloud Console and run this script again"
+            exit 1
+        fi
+
+        echo ""
+        read -p "Enter your ClickHouse IAM role ARN: " clickhouse_arn
     fi
-
-    echo ""
-    read -p "Enter your ClickHouse IAM role ARN: " clickhouse_arn
 
     # Validate ARN format
     if [[ ! $clickhouse_arn =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
@@ -255,6 +310,11 @@ if [ "$IAM_ROLE_CONFIGURED" = false ]; then
             exit 1
         fi
     fi
+
+    # Save to .env file for future use
+    echo "CLICKHOUSE_IAM_ROLE_ARN=\"$clickhouse_arn\"" > "$ENV_FILE"
+    print_success "ClickHouse IAM role ARN saved to .env for future use"
+    echo ""
 
     # Update terraform.tfvars
     # Remove old clickhouse_iam_role_arns lines (including array contents)

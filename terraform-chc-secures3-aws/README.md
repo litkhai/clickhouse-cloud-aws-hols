@@ -70,27 +70,52 @@ cd terraform-chc-secures3-aws
 The script will:
 1. ✅ Check AWS credentials automatically
 2. ✅ Auto-detect AWS region
-3. ✅ Auto-generate a unique S3 bucket name (or let you customize it)
-4. ✅ Prompt for your ClickHouse Cloud IAM role ARN
-5. ✅ Validate the configuration
-6. ✅ Deploy the infrastructure
-7. ✅ Display connection information
+3. ✅ Prompt for S3 bucket name (with random hash generation)
+4. ✅ Load saved ClickHouse IAM role ARN from `.env` (if exists)
+5. ✅ Prompt for ClickHouse Cloud IAM role ARN (with reuse option)
+6. ✅ Validate and save configuration
+7. ✅ Deploy the infrastructure
+8. ✅ Display connection information
 
-**Before running the script**, get your ClickHouse Cloud IAM role ARN:
+**Interactive Deployment Process:**
 
+When you run `./deploy.sh`, the script will:
+
+1. **S3 Bucket Configuration:**
+   - Prompt for bucket name prefix (default: `clickhouse-s3`)
+   - Automatically append 8-character random hash
+   - Example: `my-project` → `my-project-a1b2c3d4`
+
+2. **ClickHouse IAM Role:**
+   - Check for saved ARN in `.env` file
+   - If found, ask to reuse or enter new one
+   - If not found, prompt for new ARN
+   - Automatically save to `.env` for future use
+
+**First Time Setup:**
+
+Get your ClickHouse Cloud IAM role ARN:
 1. Log into [ClickHouse Cloud Console](https://clickhouse.cloud/)
 2. Select your service
 3. Navigate to: **Settings** → **Network security information**
 4. Copy the **Service role ID (IAM)** value
    - Format: `arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx`
 
-Then just run:
+Then run:
 
 ```bash
 ./deploy.sh
 ```
 
-The script will guide you through the rest!
+**Subsequent Deployments:**
+
+The script will remember your ClickHouse IAM role ARN from `.env`:
+
+```bash
+./deploy.sh
+# ✅ Found saved ClickHouse IAM role ARN in .env
+# Use saved ClickHouse IAM role ARN from .env? (y/n): y
+```
 
 ### Option B: Manual Deployment
 

@@ -15,6 +15,11 @@ test_s3_queries.sql
 example_*.sql
 deployment-info.txt
 
+# Environment files (contains sensitive data)
+.env
+.env.local
+.env.*.local
+
 # OS files
 .DS_Store
 Thumbs.db
