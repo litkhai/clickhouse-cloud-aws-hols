@@ -1,0 +1,39 @@
+# ================================================================================
+# ClickHouse Cloud S3 Integration - Direct Bucket Policy Access
+# ================================================================================
+# This configuration uses direct S3 bucket policy instead of IAM role assumption.
+# No extra_credentials() needed in SQL queries!
+
+# AWS Region Configuration
+# Leave commented to use AWS_REGION or AWS_DEFAULT_REGION environment variable
+# Uncomment and set to override
+# aws_region = "ap-northeast-2"
+
+# S3 Bucket Configuration
+# REQUIRED: Must be globally unique across all AWS accounts
+bucket_name = "my-clickhouse-data-bucket-unique-name"
+
+# ClickHouse IAM Role Configuration
+# REQUIRED: ClickHouse Cloud service IAM role ARN(s) that will have direct access
+# To find this:
+# 1. Log into ClickHouse Cloud Console (https://clickhouse.cloud/)
+# 2. Select your service
+# 3. Go to Settings → Network security information
+# 4. Copy the "Service role ID (IAM)" value
+# Format: arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx
+clickhouse_iam_role_arns = [
+  "arn:aws:iam::123456789012:role/ClickHouseInstanceRole-xxxxx"
+]
+
+# Environment Tag (Optional)
+environment = "dev"
+
+# S3 Bucket Features (Optional)
+enable_versioning      = true   # Protect against accidental deletions
+create_sample_folders  = true   # Create data/, logs/, exports/ folders
+
+# ================================================================================
+# Note: This configuration uses direct S3 bucket policy access.
+# No additional IAM role or external ID is needed.
+# SQL queries are simpler - no extra_credentials() required!
+# ================================================================================
