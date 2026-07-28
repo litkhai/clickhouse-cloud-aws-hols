@@ -70,9 +70,8 @@ variable "kafka_sasl_username" {
 }
 
 variable "kafka_sasl_password" {
-  description = "Kafka SASL password (API Secret)"
+  description = "Kafka SASL password (API Secret). No default: set it in terraform.tfvars."
   type        = string
-  default     = "admin-secret"
   sensitive   = true
 }
 

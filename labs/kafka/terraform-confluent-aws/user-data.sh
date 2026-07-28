@@ -139,9 +139,9 @@ echo "  Certificate Bundle: kafka-broker-cert-bundle.crt"
 cat > kafka_server_jaas.conf <<'JAASEOF'
 KafkaServer {
    org.apache.kafka.common.security.plain.PlainLoginModule required
-   username="admin"
-   password="admin-secret"
-   user_admin="admin-secret";
+   username="${sasl_username}"
+   password="${sasl_password}"
+   user_${sasl_username}="${sasl_password}";
 };
 JAASEOF
 

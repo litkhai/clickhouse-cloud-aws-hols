@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Test Kafka connection via NLB with SSL - No certificate verification"""
 
+import os
+import sys
+
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient
-import sys
 
 # NLB connection with SSL but disable certificate verification
 nlb_config = {
@@ -11,7 +13,7 @@ nlb_config = {
     'security.protocol': 'SASL_SSL',
     'sasl.mechanism': 'PLAIN',
     'sasl.username': 'admin',
-    'sasl.password': 'admin-secret',
+    'sasl.password': os.environ.get('KAFKA_SASL_PASSWORD', 'admin-secret'),
     'ssl.ca.location': 'certs/nlb-certificate.pem',
     'enable.ssl.certificate.verification': False,  # Disable certificate verification
 }

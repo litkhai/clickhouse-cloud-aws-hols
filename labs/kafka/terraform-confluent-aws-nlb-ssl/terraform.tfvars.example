@@ -32,4 +32,4 @@ data_producer_interval = 5  # seconds between data production
 
 # Kafka SASL Authentication (like Confluent Cloud API Key/Secret)
 kafka_sasl_username = "admin"
-kafka_sasl_password = "admin-secret"
+kafka_sasl_password = "admin-secret"   # required (no terraform default) — change for anything not ephemeral
