@@ -491,3 +491,7 @@ See [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md) for:
 - [Confluent Platform Documentation](https://docs.confluent.io/)
 - [Kafka Security Documentation](https://kafka.apache.org/documentation/#security)
 - [Kafka Advertised Listeners](https://cwiki.apache.org/confluence/display/KAFKA/KIP-103+-+Separation+of+Internal+and+External+traffic)
+
+## License
+
+[MIT](../../../LICENSE) — same as the rest of the repository.

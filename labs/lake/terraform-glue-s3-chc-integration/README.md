@@ -248,4 +248,4 @@ This will:
 
 ## License
 
-MIT License
+[MIT](../../../LICENSE) — same as the rest of the repository.

@@ -514,4 +514,6 @@ For issues or questions:
 
 ## License
 
-This configuration is provided as-is for educational and development purposes.
+[MIT](../../../LICENSE), like the rest of the repository — the earlier wording granted nothing.
+It is still educational material: it provisions real cloud resources that cost money, and
+carries no warranty. The providers and services it calls have their own terms.

@@ -354,4 +354,4 @@ The Terraform AWS provider will automatically detect and use credentials from th
 
 ## License
 
-MIT License
+[MIT](../../../LICENSE) — same as the rest of the repository.
