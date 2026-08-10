@@ -31,7 +31,15 @@ variable "key_pair_name" {
 variable "allowed_cidr_blocks" {
   description = "List of CIDR blocks allowed to access Confluent Platform"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+
+  # Deliberately no default. These blocks are applied to the ingress rules
+  # for SSH and every broker port, so a default of 0.0.0.0/0 would put
+  # ZooKeeper and Kafka on the public internet for anyone who ran
+  # terraform apply without reading the example first.
+  validation {
+    condition     = !contains(var.allowed_cidr_blocks, "0.0.0.0/0")
+    error_message = "0.0.0.0/0 exposes SSH and every broker port to the internet. Use your own address, e.g. [\"$(curl -s ifconfig.me)/32\"]."
+  }
 }
 
 variable "use_elastic_ip" {

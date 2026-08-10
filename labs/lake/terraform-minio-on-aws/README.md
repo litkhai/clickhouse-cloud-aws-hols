@@ -93,7 +93,7 @@ ebs_volume_size = 250               # Change to desired EBS size (GB)
 key_pair_name   = "YOUR_KEY_PAIR_NAME"
 
 # Network Configuration
-allowed_cidr_blocks = ["0.0.0.0/0"]  # Allows access from any IP (public endpoint)
+allowed_cidr_blocks = ["203.0.113.4/32"]  # required — your own address (curl -s ifconfig.me)
 use_elastic_ip      = false  # Set to true for production to get stable IP
 
 # MinIO Configuration
@@ -142,7 +142,7 @@ Access the MinIO web console using the `minio_console_url` from the output:
 | `instance_type` | EC2 instance type | `c5.xlarge` |
 | `ebs_volume_size` | EBS volume size in GB | `250` |
 | `key_pair_name` | EC2 key pair name | - (required) |
-| `allowed_cidr_blocks` | CIDR blocks allowed to access | `["0.0.0.0/0"]` (public) |
+| `allowed_cidr_blocks` | Who may reach MinIO and SSH. `0.0.0.0/0` is rejected | - (required) |
 | `minio_root_user` | MinIO root username (min 3 chars) | `admin` |
 | `minio_root_password` | MinIO root password (min 8 chars) | `minioadmin` |
 | `minio_data_dir` | MinIO data directory path | `/mnt/data` |

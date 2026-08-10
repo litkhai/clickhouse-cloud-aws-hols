@@ -160,7 +160,7 @@ For detailed connection examples in Python, Java, Go, Node.js, and ClickHouse, s
 | `instance_type` | EC2 instance type | "r5.xlarge" | No |
 | `ebs_volume_size` | EBS volume size in GB | 100 | No |
 | `key_pair_name` | SSH key pair name | null | No |
-| `allowed_cidr_blocks` | CIDR blocks for access | ["0.0.0.0/0"] | No |
+| `allowed_cidr_blocks` | Who may reach SSH and the broker ports. `0.0.0.0/0` is rejected | - | **Yes** |
 | `use_elastic_ip` | Allocate Elastic IP | false | No |
 | `confluent_version` | Confluent Platform version | "7.5.0" | No |
 | `sample_topic_name` | Sample topic name | "sample-data-topic" | No |
@@ -514,7 +514,7 @@ Estimated AWS costs (us-east-1 region):
 
 ⚠️ **Warning**: Default configuration is for development/testing only
 
-- All ports open to `0.0.0.0/0`
+- Every broker port open to whatever `allowed_cidr_blocks` is set to (`0.0.0.0/0` is rejected)
 - No authentication enabled
 - No encryption in transit
 - Public IP with direct access

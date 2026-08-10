@@ -31,7 +31,15 @@ variable "key_pair_name" {
 variable "allowed_cidr_blocks" {
   description = "List of CIDR blocks allowed to access MinIO"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+
+  # Deliberately no default. These blocks are applied to the ingress rules
+  # for SSH and the MinIO API and console ports, so a default of 0.0.0.0/0
+  # would put object storage on the public internet for anyone who ran
+  # terraform apply without reading the example first.
+  validation {
+    condition     = !contains(var.allowed_cidr_blocks, "0.0.0.0/0")
+    error_message = "0.0.0.0/0 exposes SSH and the MinIO ports to the internet. Use your own address, e.g. [\"$(curl -s ifconfig.me)/32\"]."
+  }
 }
 
 variable "minio_root_user" {

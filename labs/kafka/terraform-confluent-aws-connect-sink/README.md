@@ -417,7 +417,7 @@ Estimated AWS costs (us-east-1 region):
 
 ⚠️ **Warning**: Default configuration is for development/testing only
 
-- All ports open to `0.0.0.0/0`
+- Every broker port open to whatever `allowed_cidr_blocks` is set to (`0.0.0.0/0` is rejected)
 - Default SASL credentials
 - Public IP with direct access
 

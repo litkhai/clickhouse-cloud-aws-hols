@@ -19,8 +19,9 @@ ebs_volume_size = 100
 
 # Network Configuration
 # CIDR blocks allowed to access Confluent Platform
-# Default allows access from anywhere - restrict this in production!
-allowed_cidr_blocks = ["0.0.0.0/0"]
+# Required, and 0.0.0.0/0 is rejected: these blocks open SSH and every
+# broker port. Use your own address —  curl -s ifconfig.me
+allowed_cidr_blocks = ["203.0.113.4/32"]  # replace with yours
 
 # Set to true to allocate a static Elastic IP
 use_elastic_ip = false

@@ -188,6 +188,52 @@ if [ ! -f "terraform.tfvars" ]; then
     fi
 fi
 
+# Check who is allowed to reach the instance. The example ships a documentation
+# address (TEST-NET-3) on purpose: these blocks are applied to the SSH and
+# broker ingress rules, so a real value has to be a deliberate choice rather
+# than a default someone never saw.
+if grep -q "203.0.113.4/32" terraform.tfvars 2>/dev/null; then
+    print_warning "allowed_cidr_blocks is still the placeholder from the template"
+    echo ""
+    echo "These CIDR blocks open SSH and every broker port on the instance."
+    echo ""
+
+    MY_IP=$(curl -s --max-time 5 https://checkip.amazonaws.com 2>/dev/null | tr -d '[:space:]')
+    if [[ "$MY_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "  1) Just me   — ${MY_IP}/32 (this machine's public address)"
+    else
+        MY_IP=""
+        print_warning "Could not detect your public IP"
+    fi
+    echo "  2) Enter CIDR blocks myself"
+    echo ""
+    read -p "Enter your choice: " cidr_choice
+
+    if [ "$cidr_choice" = "1" ] && [ -n "$MY_IP" ]; then
+        NEW_CIDR="[\"${MY_IP}/32\"]"
+    else
+        echo ""
+        echo "Comma-separated, e.g.  203.0.113.4/32, 198.51.100.0/24"
+        read -p "CIDR blocks: " cidr_input
+        [ -n "$cidr_input" ] || { print_error "No CIDR blocks given"; exit 1; }
+        NEW_CIDR="["
+        IFS=',' read -ra PARTS <<< "$cidr_input"
+        for part in "${PARTS[@]}"; do
+            part=$(echo "$part" | tr -d '[:space:]')
+            [ -n "$part" ] || continue
+            [ "$part" = "0.0.0.0/0" ] && { print_error "0.0.0.0/0 puts SSH and the brokers on the public internet"; exit 1; }
+            NEW_CIDR="${NEW_CIDR}\"${part}\", "
+        done
+        NEW_CIDR="${NEW_CIDR%, }]"
+    fi
+
+    # sed -i differs between GNU and BSD, so rewrite through a temp file.
+    awk -v repl="allowed_cidr_blocks = $NEW_CIDR" \
+        '/^allowed_cidr_blocks/ {print repl; next} {print}' \
+        terraform.tfvars > terraform.tfvars.tmp && mv terraform.tfvars.tmp terraform.tfvars
+    print_success "allowed_cidr_blocks = $NEW_CIDR"
+fi
+
 # Check for key pair configuration
 KEY_PAIR_CONFIGURED=false
 
