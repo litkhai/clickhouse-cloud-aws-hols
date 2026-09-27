@@ -40,6 +40,8 @@ These labs are kept, not archived, but most have not been re-run since late 2025
 
 ### ✅ Repository checks
 
+Current state and what still needs a re-run: [STATUS.md](STATUS.md).
+
 ```bash
 git config core.hooksPath .githooks
 python3 .github/scripts/check_links.py
@@ -89,6 +91,8 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 | [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols) | ClickHouse 핵심 실습 |
 
 ### ✅ 저장소 검사
+
+현재 상태와 재실행이 필요한 항목: [STATUS.md](STATUS.md).
 
 ```bash
 git config core.hooksPath .githooks
