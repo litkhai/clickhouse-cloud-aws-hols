@@ -1,5 +1,17 @@
 # Confluent Platform with ClickHouse Sink Connector on AWS
 
+> **Last verified: 2025-11-24** — date of the last commit made while running the lab (there is no separate run log). AWS provider `~> 5.0`.
+> Changed since without a full re-run:
+> - 2026-07-28 — the Kafka SASL username/password moved from a hard-coded default to required variables (not run)
+> - 2026-08-10 — `allowed_cidr_blocks` is required and rejects `0.0.0.0/0` (checked with `terraform plan` on 1.15.8, not applied)
+> Provider, AMI and Confluent/MinIO versions may have drifted since; expect to adjust before `apply`.
+>
+> **마지막 검증: 2025-11-24** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
+> 그 뒤 전체 재실행 없이 바뀐 것:
+> - 2026-07-28 — Kafka SASL 사용자명·비밀번호가 하드코딩 기본값에서 필수 변수로 바뀜 (실행 안 함)
+> - 2026-08-10 — `allowed_cidr_blocks` 필수화, `0.0.0.0/0` 거부 (terraform 1.15.8에서 `plan`까지만 확인, apply 안 함)
+> 그동안 provider·AMI·Confluent/MinIO 버전이 달라졌을 수 있으니 `apply` 전에 조정이 필요할 수 있습니다.
+
 This Terraform configuration deploys a complete Confluent Platform stack on AWS EC2 with ClickHouse Sink Connector pre-installed, enabling automatic data streaming from Kafka topics to ClickHouse Cloud.
 
 ## Features

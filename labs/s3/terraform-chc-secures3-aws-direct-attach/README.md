@@ -1,5 +1,15 @@
 # ClickHouse S3 Integration with Direct Bucket Policy Access
 
+> **Last run: 2025-12-05 — not verified** — date of the last commit made while running the lab (there is no separate run log). AWS provider `~> 5.0`.
+> **That run failed on ClickHouse Cloud** (cross-account access, HTTP 403) — see the warning below.
+> No code changes since — only documentation and licence edits.
+> Provider and AWS/ClickHouse Cloud behaviour may have drifted since; expect to adjust before `apply`.
+>
+> **마지막 실행: 2025-12-05 — 검증되지 않음** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
+> **이 실행은 ClickHouse Cloud에서 실패했습니다** (교차 계정 접근, HTTP 403) — 아래 경고 참고.
+> 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
+> 그동안 provider와 AWS·ClickHouse Cloud 동작이 달라졌을 수 있으니 `apply` 전에 조정이 필요할 수 있습니다.
+
 > **⚠️ WARNING: Limited ClickHouse Cloud Support**
 > This approach **does not work reliably with ClickHouse Cloud** due to cross-account limitations.
 > **For ClickHouse Cloud, use [terraform-chc-secures3-aws](../terraform-chc-secures3-aws/) instead.**

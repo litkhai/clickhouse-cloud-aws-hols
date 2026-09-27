@@ -1,5 +1,15 @@
 # Terraform MinIO on AWS
 
+> **Last verified: 2025-11-16** — date of the last commit made while running the lab (there is no separate run log). AWS provider `~> 5.0`.
+> Changed since without a full re-run:
+> - 2026-08-10 — `allowed_cidr_blocks` is required and rejects `0.0.0.0/0` (checked with `terraform plan` on 1.15.8, not applied)
+> Provider, AMI and Confluent/MinIO versions may have drifted since; expect to adjust before `apply`.
+>
+> **마지막 검증: 2025-11-16** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
+> 그 뒤 전체 재실행 없이 바뀐 것:
+> - 2026-08-10 — `allowed_cidr_blocks` 필수화, `0.0.0.0/0` 거부 (terraform 1.15.8에서 `plan`까지만 확인, apply 안 함)
+> 그동안 provider·AMI·Confluent/MinIO 버전이 달라졌을 수 있으니 `apply` 전에 조정이 필요할 수 있습니다.
+
 Terraform scripts to deploy a single-node MinIO server on AWS EC2.
 
 ## Prerequisites

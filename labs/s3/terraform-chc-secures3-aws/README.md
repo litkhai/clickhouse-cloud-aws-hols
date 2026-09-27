@@ -1,5 +1,13 @@
 # ClickHouse Cloud Secure S3 Integration with Terraform
 
+> **Last verified: 2025-11-30** — date of the last commit made while running the lab (there is no separate run log). AWS provider `~> 5.0`.
+> No code changes since — only documentation and licence edits.
+> Provider and AWS/ClickHouse Cloud behaviour may have drifted since; expect to adjust before `apply`.
+>
+> **마지막 검증: 2025-11-30** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
+> 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
+> 그동안 provider와 AWS·ClickHouse Cloud 동작이 달라졌을 수 있으니 `apply` 전에 조정이 필요할 수 있습니다.
+
 This Terraform configuration sets up secure S3 access for ClickHouse Cloud using IAM role-based authentication. It allows ClickHouse Cloud to read from and write to an S3 bucket using the S3 table engine without managing access keys.
 
 ## Features
