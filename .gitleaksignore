@@ -1,0 +1,7 @@
+# Known, reviewed findings in history. Truncated sample STS credentials in a
+# troubleshooting doc, assessed harmless in clickhouse-hols STATUS.md.
+# Fingerprints embed rewritten commit SHAs: regenerate if origin/main moved
+# after the 2026-09-27 rehearsal (kit/rehearse.sh).
+751b83d19395a8e25e4ea29acaf3e44313d654d3:terraform-glue-s3-chc-integration/CREDENTIAL_SOLUTIONS.md:generic-api-key:129
+751b83d19395a8e25e4ea29acaf3e44313d654d3:terraform-glue-s3-chc-integration/CREDENTIAL_SOLUTIONS.md:generic-api-key:130
+751b83d19395a8e25e4ea29acaf3e44313d654d3:terraform-glue-s3-chc-integration/CREDENTIAL_SOLUTIONS.md:generic-api-key:143

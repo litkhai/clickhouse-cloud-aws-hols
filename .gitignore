@@ -1,0 +1,36 @@
+*.DS_Store
+.DS_Store
+
+# Secrets — commit only the .example / .template counterparts
+.env
+.env.local
+# Per-developer Claude Code settings: records local tool permissions and has
+# held connection strings.
+.claude/settings.local.json
+*.tfvars
+!*.tfvars.example
+
+# Local artifacts
+*.bak
+*.log
+**/test-results/
+**/backup-*/
+**/backup-metadata-*/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Terraform working state. A saved plan carries the whole state inside it, so
+# ignoring *.tfstate alone is not enough — that is how a tfplan holding real
+# account IDs, bucket names and role ARNs got committed to clickhouse-hols once.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+*.tfplan
+# Editor leftovers next to a tfvars file: terraform.tfvars.save is not matched
+# by *.tfvars.
+*.tfvars.*
+!*.tfvars.example
