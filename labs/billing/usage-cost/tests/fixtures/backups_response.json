@@ -1,0 +1,46 @@
+{
+  "status": 200,
+  "requestId": "00000000-0000-4000-8000-0000000000f2",
+  "result": [
+    {
+      "id": "00000000-0000-4000-8000-0000000000b4",
+      "status": "in_progress",
+      "serviceId": "00000000-0000-4000-8000-000000000002",
+      "startedAt": "2026-10-01T06:00:00.000Z",
+      "finishedAt": null,
+      "sizeInBytes": null,
+      "durationInSeconds": null,
+      "type": "incremental"
+    },
+    {
+      "id": "00000000-0000-4000-8000-0000000000b3",
+      "status": "done",
+      "serviceId": "00000000-0000-4000-8000-000000000002",
+      "startedAt": "2026-09-30T06:00:00.000Z",
+      "finishedAt": "2026-09-30T06:05:00.000Z",
+      "sizeInBytes": 2097152,
+      "durationInSeconds": 300,
+      "type": "incremental"
+    },
+    {
+      "id": "00000000-0000-4000-8000-0000000000b2",
+      "status": "error",
+      "serviceId": "00000000-0000-4000-8000-000000000002",
+      "startedAt": "2026-09-29T06:00:00.000Z",
+      "finishedAt": "2026-09-29T06:01:00.000Z",
+      "sizeInBytes": null,
+      "durationInSeconds": 60,
+      "type": "incremental"
+    },
+    {
+      "id": "00000000-0000-4000-8000-0000000000b1",
+      "status": "done",
+      "serviceId": "00000000-0000-4000-8000-000000000002",
+      "startedAt": "2026-09-28T06:00:00.000Z",
+      "finishedAt": "2026-09-28T06:20:00.000Z",
+      "sizeInBytes": 1073741824,
+      "durationInSeconds": 1200,
+      "type": "full"
+    }
+  ]
+}

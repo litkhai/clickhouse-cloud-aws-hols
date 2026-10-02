@@ -1,6 +1,6 @@
 # STATUS.md
 
-**As of 2026-09-27** — split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10) with history.
+**As of 2026-10-02** — split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10) with history.
 
 ## CI
 
@@ -9,7 +9,7 @@ GitHub secret scanning and push protection are on.
 
 ## Inventory
 
-7 labs in the README tables; 7 single-language: `labs/kafka/terraform-confluent-aws`, `labs/kafka/terraform-confluent-aws-connect-sink`, `labs/kafka/terraform-confluent-aws-nlb-ssl`, `labs/lake/terraform-glue-s3-chc-integration`, `labs/lake/terraform-minio-on-aws`, `labs/s3/terraform-chc-secures3-aws`, `labs/s3/terraform-chc-secures3-aws-direct-attach`.
+8 labs in the README tables; 1 bilingual: `labs/billing/usage-cost`; 7 single-language: `labs/kafka/terraform-confluent-aws`, `labs/kafka/terraform-confluent-aws-connect-sink`, `labs/kafka/terraform-confluent-aws-nlb-ssl`, `labs/lake/terraform-glue-s3-chc-integration`, `labs/lake/terraform-minio-on-aws`, `labs/s3/terraform-chc-secures3-aws`, `labs/s3/terraform-chc-secures3-aws-direct-attach`.
 
 ## Open work
 
