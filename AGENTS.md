@@ -23,6 +23,9 @@ Differences from the core repository:
   Update the date only after a real `apply` + `destroy`; a `terraform plan` or `validate` run is
   listed under "changed since", never as the verified date. Update the *Last run* column in the
   root README in the same commit.
+- **Labs that create nothing** (`labs/billing/`) have no `deploy.sh` → `destroy.sh`. Their banner
+  date is the day every numbered script ran end to end against a real organization. A single step,
+  a syntax check or a run against saved JSON goes under "changed since".
 - Provider upgrades (`hashicorp/aws ~> 5.0` today) happen only together with a re-run.
 - Never commit Terraform state or saved plans. The `hygiene` job checks file *content*, because
   a `tfplan` is a zip with the full state inside and slips past name-based ignore rules.

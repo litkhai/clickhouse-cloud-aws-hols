@@ -34,3 +34,6 @@ tfplan
 # by *.tfvars.
 *.tfvars.*
 !*.tfvars.example
+
+# usage-cost lab: raw API responses and flattened records (real names, IDs and amounts live there)
+labs/billing/*/out/
