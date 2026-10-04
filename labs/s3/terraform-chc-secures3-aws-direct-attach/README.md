@@ -108,7 +108,7 @@ This approach is expected to work for the cases below — none of them has been 
 - **Simplified SQL Queries**: No extra_credentials() required
 - **Read & Write Permissions**: Full support for SELECT, INSERT, and export operations
 - **S3 Table Engine Support**: Create tables backed by S3 storage in various formats
-- **Production-Ready**: Includes encryption, versioning, and public access blocking
+- **Bucket hardening**: encryption (AES256), versioning and public ACL blocking
 - **Multiple Format Support**: Parquet, CSV, JSON, and other ClickHouse-supported formats
 
 ### Prerequisites
@@ -144,7 +144,7 @@ export AWS_REGION="ap-northeast-2"  # Optional: Set default region
 Copy the example configuration:
 
 ```bash
-cd terraform-chc-secures3-aws-direct-attach
+cd labs/s3/terraform-chc-secures3-aws-direct-attach  # from the repository root
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -179,6 +179,8 @@ terraform apply
 
 The deployment takes about 1-2 minutes.
 
+Instead of Steps 2–3 you can run `./deploy.sh`: it creates `terraform.tfvars` from the example if it is missing, asks for a bucket name and the ClickHouse IAM role ARN (saved to `.env`), runs `terraform init`, `validate` and `plan`, and applies the plan after you type `yes`. Its confirmation text lists an IAM role and policy that `main.tf` does not create, and the `deployment-info.txt` it writes uses `extra_credentials()` SQL; both are left over from the AssumeRole lab.
+
 #### Step 4: Get Connection Information
 
 After deployment, view the connection details:
@@ -190,6 +192,8 @@ terraform output connection_info
 # View SQL examples
 terraform output clickhouse_sql_examples
 ```
+
+`./test-s3-integration.sh` checks that the bucket exists, uploads a small CSV to `test/data.csv` with the AWS CLI and writes SQL files (`test_s3_queries.sql`, `example_*.sql`) for you to run in ClickHouse; it does not connect to ClickHouse itself. As written it also needs a Terraform output `iam_role_arn`, which `outputs.tf` does not define, and exits when that output is empty; its SQL uses `extra_credentials()` from the AssumeRole lab.
 
 ### Usage Examples
 
@@ -487,6 +491,8 @@ resource "aws_s3_bucket_logging" "clickhouse_data_logging" {
 }
 ```
 
+The snippet assumes a separate log bucket, `aws_s3_bucket.log_bucket`, that you create yourself; `main.tf` does not define it.
+
 ### Cost Optimization
 
 #### Estimated Costs
@@ -499,6 +505,8 @@ For a bucket with 100 GB of data:
 - **Data Transfer (cross-region)**: $0.02/GB
 
 **Total**: ~$3-5/month for moderate usage
+
+These are estimates from when the lab was written, not measured; check current AWS pricing for your region.
 
 #### Cost Saving Tips
 
@@ -535,6 +543,8 @@ terraform destroy
 ```
 
 **Warning**: This will delete the S3 bucket and all its contents. Make sure to backup any important data first.
+
+`./destroy.sh` does the same with prompts: it lists the bucket's objects, offers a local backup (`aws s3 sync`), empties the bucket including old object versions (`main.tf` does not set `force_destroy`), applies a destroy plan after you type `yes`, and offers to delete the local Terraform files.
 
 ### Outputs Reference
 
@@ -670,7 +680,7 @@ ClickHouse Cloud 서비스는 (내 계정과 다른) **ClickHouse의 AWS 계정*
 - **단순해진 SQL 쿼리**: extra_credentials()가 필요 없습니다
 - **읽기·쓰기 권한**: SELECT, INSERT, 내보내기 작업을 모두 지원합니다
 - **S3 테이블 엔진 지원**: 다양한 포맷의 S3 스토리지를 기반으로 하는 테이블을 만듭니다
-- **프로덕션 준비 완료(Production-Ready)**: 암호화, 버전 관리, 퍼블릭 액세스 차단을 포함합니다
+- **버킷 보호 설정**: 암호화(AES256), 버전 관리, 퍼블릭 ACL 차단을 포함합니다
 - **여러 포맷 지원**: Parquet, CSV, JSON 및 ClickHouse가 지원하는 그 밖의 포맷
 
 ### 사전 준비
@@ -706,7 +716,7 @@ export AWS_REGION="ap-northeast-2"  # 선택: 기본 리전 설정
 예시 구성을 복사합니다.
 
 ```bash
-cd terraform-chc-secures3-aws-direct-attach
+cd labs/s3/terraform-chc-secures3-aws-direct-attach  # 저장소 루트에서
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -741,6 +751,8 @@ terraform apply
 
 배포에는 1-2분 정도 걸립니다.
 
+2–3단계 대신 `./deploy.sh`를 실행해도 됩니다. 이 스크립트는 `terraform.tfvars`가 없으면 예시에서 만들고, 버킷 이름과 ClickHouse IAM 역할 ARN을 물어본 뒤(ARN은 `.env`에 저장), `terraform init`, `validate`, `plan`을 실행하고 `yes`를 입력하면 그 계획을 적용합니다. 확인 문구에는 `main.tf`가 만들지 않는 IAM 역할과 정책이 나오고, 스크립트가 쓰는 `deployment-info.txt`에는 `extra_credentials()` SQL이 들어 있습니다. 둘 다 AssumeRole 실습에서 남은 것입니다.
+
 #### 4단계: 연결 정보 확인
 
 배포가 끝나면 연결 정보를 확인합니다.
@@ -752,6 +764,8 @@ terraform output connection_info
 # SQL 예시 보기
 terraform output clickhouse_sql_examples
 ```
+
+`./test-s3-integration.sh`는 버킷이 있는지 확인하고, AWS CLI로 작은 CSV를 `test/data.csv`에 올리고, ClickHouse에서 실행할 SQL 파일(`test_s3_queries.sql`, `example_*.sql`)을 씁니다. ClickHouse에 직접 연결하지는 않습니다. 지금 코드로는 `outputs.tf`에 정의되지 않은 Terraform 출력값 `iam_role_arn`도 필요하며, 이 출력값이 비어 있으면 종료합니다. 스크립트가 쓰는 SQL은 AssumeRole 실습의 `extra_credentials()`를 사용합니다.
 
 ### 사용 예시
 
@@ -1049,6 +1063,8 @@ resource "aws_s3_bucket_logging" "clickhouse_data_logging" {
 }
 ```
 
+이 코드는 직접 만든 별도 로그 버킷 `aws_s3_bucket.log_bucket`을 전제로 합니다. `main.tf`에는 이 리소스가 정의되어 있지 않습니다.
+
 ### 비용 최적화
 
 #### 예상 비용
@@ -1061,6 +1077,8 @@ resource "aws_s3_bucket_logging" "clickhouse_data_logging" {
 - **데이터 전송 (리전 간)**: $0.02/GB
 
 **합계**: 보통 수준의 사용량에서 ~$3-5/월
+
+실습을 작성할 때의 추정치이며 측정한 값이 아닙니다. 사용하는 리전의 현재 AWS 요금을 확인하세요.
 
 #### 비용 절감 팁
 
@@ -1097,6 +1115,8 @@ terraform destroy
 ```
 
 **경고**: S3 버킷과 그 안의 모든 내용이 삭제됩니다. 중요한 데이터는 먼저 백업하세요.
+
+`./destroy.sh`는 같은 작업을 확인 질문과 함께 합니다. 버킷의 객체를 보여 주고, 로컬 백업(`aws s3 sync`)을 제안하고, 이전 객체 버전까지 포함해 버킷을 비운 다음(`main.tf`는 `force_destroy`를 설정하지 않음), `yes`를 입력하면 삭제 계획을 적용하고, 로컬 Terraform 파일 삭제를 제안합니다.
 
 ### 출력값 (`outputs`) 참조
 
