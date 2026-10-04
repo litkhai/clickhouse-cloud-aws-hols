@@ -38,7 +38,7 @@ This Terraform configuration deploys a complete Confluent Platform stack on AWS 
 - **ClickHouse Sink Connector**: Pre-installed and ready to stream data to ClickHouse Cloud
 - **Automated Setup**: One-command deployment with Docker Compose
 - **Sample Data Producer**: Automatically generates sample data to demonstrate the pipeline
-- **SASL Authentication**: Production-ready authentication with SASL/PLAIN (like Confluent Cloud)
+- **SASL Authentication**: SASL/PLAIN on the external broker listeners, `SASL_SSL` on 9092 and `SASL_PLAINTEXT` on 9093 (like Confluent Cloud)
 - **Easy Management**: Scripts for start, stop, and status checking
 
 ### Architecture
@@ -62,7 +62,8 @@ Sample Data Producer → Kafka Topic → ClickHouse Sink Connector → ClickHous
 #### 1. Clone and Navigate
 
 ```bash
-cd terraform-confluent-aws-connect-sink
+git clone https://github.com/litkhai/clickhouse-cloud-aws-hols.git
+cd clickhouse-cloud-aws-hols/labs/kafka/terraform-confluent-aws-connect-sink
 ```
 
 #### 2. Configure Variables
@@ -81,6 +82,12 @@ aws_region = "us-east-1"
 instance_name = "confluent-clickhouse-demo"
 instance_type = "r5.xlarge"
 key_pair_name = "my-key-pair"  # Optional: for SSH access
+
+# Network Configuration (required; 0.0.0.0/0 is rejected)
+allowed_cidr_blocks = ["203.0.113.4/32"]  # replace with yours
+
+# Kafka SASL Authentication (the password is required, no default)
+kafka_sasl_password = "admin-secret"
 
 # ClickHouse Cloud Configuration (optional - can be added later)
 clickhouse_host     = "your-instance.clickhouse.cloud"
@@ -263,7 +270,15 @@ Event types include: `page_view`, `click`, `purchase`, `signup`, `logout`
 | `aws_region` | AWS region for deployment | null (uses env var) | No |
 | `instance_name` | Name tag for EC2 instance | "confluent-server" | No |
 | `instance_type` | EC2 instance type | "r5.xlarge" | No |
+| `ebs_volume_size` | Size of the EBS volume in GB | 100 | No |
 | `key_pair_name` | SSH key pair name | null | No |
+| `allowed_cidr_blocks` | Who may reach SSH and every service port. `0.0.0.0/0` is rejected | - | **Yes** |
+| `use_elastic_ip` | Allocate and associate an Elastic IP | false | No |
+| `confluent_version` | Confluent Platform version tag | "7.5.0" | No |
+| `sample_topic_name` | Name of the sample topic | "sample-data-topic" | No |
+| `data_producer_interval` | Seconds between sample messages (must be > 0) | 5 | No |
+| `kafka_sasl_username` | Kafka SASL username | "admin" | No |
+| `kafka_sasl_password` | Kafka SASL password | - | **Yes** |
 | `clickhouse_host` | ClickHouse Cloud host | null | No |
 | `clickhouse_port` | ClickHouse Cloud port | 8443 | No |
 | `clickhouse_database` | ClickHouse database | "default" | No |
@@ -301,9 +316,9 @@ terraform output kafka_sasl_username
 terraform output -raw kafka_sasl_password
 ```
 
-Default credentials:
-- **Username**: `admin`
-- **Password**: `admin-secret`
+Credentials:
+- **Username**: `kafka_sasl_username`, default `admin`
+- **Password**: `kafka_sasl_password`, required with no default (`terraform.tfvars.example` sets `admin-secret`)
 
 ### Management Scripts
 
@@ -426,6 +441,8 @@ Estimated AWS costs (us-east-1 region):
 - **Data transfer**: Variable based on usage
 - **Total estimated cost**: ~$190-200/month for 24/7 operation
 
+These are estimates from when the lab was written, not measured; check current AWS pricing for your region.
+
 #### Cost Optimization
 
 1. **Stop when not in use**: `terraform destroy` when done
@@ -437,7 +454,7 @@ Estimated AWS costs (us-east-1 region):
 #### For Production Use
 
 1. **Restrict CIDR blocks**: Limit `allowed_cidr_blocks` to your IP ranges
-2. **Use strong passwords**: Change default `kafka_sasl_password` and `clickhouse_password`
+2. **Use strong passwords**: Replace the example `kafka_sasl_password` (`admin-secret` in `terraform.tfvars.example`) and set a strong `clickhouse_password`
 3. **Enable CloudWatch**: Add monitoring and alerting
 4. **Use private subnets**: Deploy in private subnet with bastion host
 5. **Secrets management**: Store credentials in AWS Secrets Manager
@@ -448,7 +465,7 @@ Estimated AWS costs (us-east-1 region):
 ⚠️ **Warning**: Default configuration is for development/testing only
 
 - Every broker port open to whatever `allowed_cidr_blocks` is set to (`0.0.0.0/0` is rejected)
-- Default SASL credentials
+- SASL username defaults to `admin`; the password is the one you set (`admin-secret` in `terraform.tfvars.example`)
 - Public IP with direct access
 
 ### Outputs
@@ -560,7 +577,7 @@ carries no warranty. The providers and services it calls have their own terms.
 - **ClickHouse Sink Connector**: 미리 설치되어 있어 ClickHouse Cloud로 바로 데이터를 스트리밍할 수 있음
 - **자동 설정**: Docker Compose로 명령 하나에 배포
 - **샘플 데이터 프로듀서**: 파이프라인을 보여 주는 샘플 데이터를 자동으로 생성
-- **SASL 인증**: SASL/PLAIN을 쓰는 프로덕션 수준(production-ready)의 인증 (Confluent Cloud와 같은 방식)
+- **SASL 인증**: 외부 브로커 리스너에서 SASL/PLAIN 사용, 9092는 `SASL_SSL`, 9093은 `SASL_PLAINTEXT` (Confluent Cloud와 같은 방식)
 - **쉬운 관리**: 시작, 중지, 상태 확인용 스크립트
 
 ### 아키텍처
@@ -584,7 +601,8 @@ Sample Data Producer → Kafka Topic → ClickHouse Sink Connector → ClickHous
 #### 1. 클론하고 디렉터리로 이동
 
 ```bash
-cd terraform-confluent-aws-connect-sink
+git clone https://github.com/litkhai/clickhouse-cloud-aws-hols.git
+cd clickhouse-cloud-aws-hols/labs/kafka/terraform-confluent-aws-connect-sink
 ```
 
 #### 2. 변수 설정
@@ -603,6 +621,12 @@ aws_region = "us-east-1"
 instance_name = "confluent-clickhouse-demo"
 instance_type = "r5.xlarge"
 key_pair_name = "my-key-pair"  # 선택 사항: SSH 접속용
+
+# 네트워크 설정 (필수, 0.0.0.0/0은 거부됨)
+allowed_cidr_blocks = ["203.0.113.4/32"]  # 자신의 주소로 바꿀 것
+
+# Kafka SASL 인증 (비밀번호는 필수, 기본값 없음)
+kafka_sasl_password = "admin-secret"
 
 # ClickHouse Cloud 설정 (선택 사항 - 나중에 추가할 수 있음)
 clickhouse_host     = "your-instance.clickhouse.cloud"
@@ -785,7 +809,15 @@ SELECT event_type, count() as count FROM default.kafka_events GROUP BY event_typ
 | `aws_region` | 배포할 AWS 리전 | null (환경 변수 사용) | 아니요 |
 | `instance_name` | EC2 인스턴스의 Name 태그 | "confluent-server" | 아니요 |
 | `instance_type` | EC2 인스턴스 유형 | "r5.xlarge" | 아니요 |
+| `ebs_volume_size` | EBS 볼륨 크기 (GB) | 100 | 아니요 |
 | `key_pair_name` | SSH 키 페어 이름 | null | 아니요 |
+| `allowed_cidr_blocks` | SSH와 모든 서비스 포트에 접근할 수 있는 대상. `0.0.0.0/0`은 거부됨 | - | **예** |
+| `use_elastic_ip` | Elastic IP를 할당해 연결할지 여부 | false | 아니요 |
+| `confluent_version` | Confluent Platform 버전 태그 | "7.5.0" | 아니요 |
+| `sample_topic_name` | 샘플 토픽 이름 | "sample-data-topic" | 아니요 |
+| `data_producer_interval` | 샘플 메시지 사이의 간격(초, 0보다 커야 함) | 5 | 아니요 |
+| `kafka_sasl_username` | Kafka SASL 사용자명 | "admin" | 아니요 |
+| `kafka_sasl_password` | Kafka SASL 비밀번호 | - | **예** |
 | `clickhouse_host` | ClickHouse Cloud 호스트 | null | 아니요 |
 | `clickhouse_port` | ClickHouse Cloud 포트 | 8443 | 아니요 |
 | `clickhouse_database` | ClickHouse 데이터베이스 | "default" | 아니요 |
@@ -823,9 +855,9 @@ terraform output kafka_sasl_username
 terraform output -raw kafka_sasl_password
 ```
 
-기본 자격 증명:
-- **사용자명**: `admin`
-- **비밀번호**: `admin-secret`
+자격 증명:
+- **사용자명**: `kafka_sasl_username`, 기본값 `admin`
+- **비밀번호**: `kafka_sasl_password`, 기본값 없는 필수 변수 (`terraform.tfvars.example`은 `admin-secret`으로 설정)
 
 ### 관리 스크립트
 
@@ -948,6 +980,8 @@ watch -n 5 "clickhouse-client --host <host> --query 'SELECT count() FROM default
 - **데이터 전송**: 사용량에 따라 다름
 - **총 예상 비용**: 24/7 운영 시 ~$190-200/월
 
+실습을 작성할 때의 추정치이며 측정한 값이 아닙니다. 사용하는 리전의 현재 AWS 요금을 확인하세요.
+
 #### 비용 최적화
 
 1. **쓰지 않을 때는 중지**: 다 쓰면 `terraform destroy`
@@ -959,7 +993,7 @@ watch -n 5 "clickhouse-client --host <host> --query 'SELECT count() FROM default
 #### 프로덕션에서 쓸 때
 
 1. **CIDR 블록 제한**: `allowed_cidr_blocks`를 자신의 IP 범위로 제한
-2. **강한 비밀번호 사용**: 기본 `kafka_sasl_password`와 `clickhouse_password`를 변경
+2. **강한 비밀번호 사용**: 예제의 `kafka_sasl_password`(`terraform.tfvars.example`의 `admin-secret`)를 바꾸고 `clickhouse_password`도 강한 값으로 설정
 3. **CloudWatch 활성화**: 모니터링과 알림 추가
 4. **프라이빗 서브넷 사용**: 배스천 호스트와 함께 프라이빗 서브넷에 배포
 5. **시크릿 관리**: 자격 증명을 AWS Secrets Manager에 저장
@@ -970,7 +1004,7 @@ watch -n 5 "clickhouse-client --host <host> --query 'SELECT count() FROM default
 ⚠️ **경고**: 기본 구성은 개발/테스트 전용입니다
 
 - 모든 브로커 포트가 `allowed_cidr_blocks`에 설정한 범위에 열려 있음 (`0.0.0.0/0`은 거부됨)
-- 기본 SASL 자격 증명
+- SASL 사용자명은 기본값 `admin`, 비밀번호는 직접 설정한 값 (`terraform.tfvars.example`은 `admin-secret`)
 - 직접 접속할 수 있는 퍼블릭 IP
 
 ### 출력값 (`outputs`)
