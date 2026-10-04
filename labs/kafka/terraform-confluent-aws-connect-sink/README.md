@@ -2,7 +2,7 @@
 
 > **Last verified: 2025-11-24** — date of the last commit made while running the lab (there is no separate run log). AWS provider `~> 5.0`.
 > Changed since without a full re-run:
-> - 2026-07-28 — the Kafka SASL username/password moved from a hard-coded default to required variables (not run)
+> - 2026-07-28 — the Kafka SASL password moved from a hard-coded default to a required variable; the username still defaults to `admin` (not run)
 > - 2026-08-10 — `allowed_cidr_blocks` is required and rejects `0.0.0.0/0` (checked with `terraform plan` on 1.15.8, not applied)
 >
 > Not checked — adjust before `apply` (recorded 2026-10-04 from reading the code; nothing was run):
@@ -15,7 +15,7 @@
 >
 > **마지막 검증: 2025-11-24** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
 > 그 뒤 전체 재실행 없이 바뀐 것:
-> - 2026-07-28 — Kafka SASL 사용자명·비밀번호가 하드코딩 기본값에서 필수 변수로 바뀜 (실행 안 함)
+> - 2026-07-28 — Kafka SASL 비밀번호가 하드코딩 기본값에서 필수 변수로 바뀜. 사용자명은 여전히 기본값 `admin` (실행 안 함)
 > - 2026-08-10 — `allowed_cidr_blocks` 필수화, `0.0.0.0/0` 거부 (terraform 1.15.8에서 `plan`까지만 확인, apply 안 함)
 >
 > 확인 안 된 것 — `apply` 전에 맞출 것 (2026-10-04 코드를 읽고 기록, 실행 안 함):

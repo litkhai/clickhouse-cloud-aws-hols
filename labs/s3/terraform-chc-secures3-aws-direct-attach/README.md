@@ -18,7 +18,7 @@
 > 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
 >
 > 확인 안 된 것 — `apply` 전에 맞출 것 (2026-10-04 코드를 읽고 기록, 실행 안 함):
-> - 어디서도 검증된 적 없음. 아래 *When Direct Bucket Policy Works*의 같은 계정·OSS 경우도 실행한 적 없음.
+> - 어디서도 검증된 적 없음. 아래 *직접 버킷 정책 방식이 동작하는 경우*의 같은 계정·OSS 경우도 실행한 적 없음.
 > - ClickHouse Cloud에서 빠진 것: 아래 제약 설명대로라면 ClickHouse 계정에 있는 ClickHouse 쪽 IAM 역할에도 이 버킷 권한이 있어야 하는데, 사용자는 그것을 추가할 수 없음. 403의 원인을 더 추적하지는 않았음. ClickHouse Cloud에서는 [terraform-chc-secures3-aws](../terraform-chc-secures3-aws/)를 쓸 것.
 > - OSS·같은 계정 확인에 빠진 것: 내 계정의 IAM 역할로 실행되는 ClickHouse 서버와, 그 역할 ARN을 넣은 `clickhouse_iam_role_arns`. 이 실습은 버킷과 그 설정, 버킷 정책, 선택적 샘플 폴더만 만듦.
 > - AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
