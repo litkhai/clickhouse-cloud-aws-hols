@@ -10,7 +10,7 @@
 > - SASL: `user-data.sh` puts the username and password unescaped into the JAAS config and `docker-compose.yml`; every run so far used `admin` / `admin-secret`. Use letters and digits only — `"` breaks the quoting and `$` is expanded by the shell.
 > - `user-data.sh` prints the SASL password to the instance's cloud-init log.
 > - Not pinned: the AMI (newest Canonical Ubuntu 22.04 at `apply` time). Confluent images are pinned by `confluent_version` (default `7.5.0`).
-> - Run path: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start* and *Cleanup*; `deploy.sh`, `deploy-complete.sh` and `destroy.sh` also exist).
+> - Run path: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start* and *Cleanup*; `deploy.sh`, `deploy-complete.sh` and `destroy.sh` also exist). `deploy-with-cert.sh` leaves `NLB_DNS_PLACEHOLDER` in the advertised listener; only `deploy-complete.sh`, `update-advertised-listener.sh` and `manual-update-advertised-listener.sh` replace it, each followed by `docker-compose restart broker`.
 > - A re-run should show: a SASL_SSL client inside `allowed_cidr_blocks` produces and consumes through the NLB on port 9094, and the same client from an address outside it cannot connect.
 >
 > **마지막 검증: 2025-11-20** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
@@ -23,7 +23,7 @@
 > - SASL: `user-data.sh`가 사용자명·비밀번호를 이스케이프 없이 JAAS 설정과 `docker-compose.yml`에 넣음. 지금까지 실행은 모두 `admin` / `admin-secret`. 영문자와 숫자만 쓸 것 — `"`는 따옴표를 깨고 `$`는 셸이 치환함.
 > - `user-data.sh`가 SASL 비밀번호를 인스턴스의 cloud-init 로그에 출력함.
 > - 고정 안 된 것: AMI (`apply` 시점의 최신 Canonical Ubuntu 22.04). Confluent 이미지는 `confluent_version`(기본 `7.5.0`)으로 고정.
-> - 실행 경로: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start*·*Cleanup*. `deploy.sh`, `deploy-complete.sh`, `destroy.sh`도 있음).
+> - 실행 경로: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start*·*Cleanup*. `deploy.sh`, `deploy-complete.sh`, `destroy.sh`도 있음). `deploy-with-cert.sh`는 advertised listener의 `NLB_DNS_PLACEHOLDER`를 그대로 둠. 이 값을 바꾸는 것은 `deploy-complete.sh`, `update-advertised-listener.sh`, `manual-update-advertised-listener.sh`뿐이고, 셋 다 바꾼 뒤 `docker-compose restart broker`를 실행함.
 > - 재실행에서 보여야 할 것: `allowed_cidr_blocks` 안의 SASL_SSL 클라이언트가 NLB 9094 포트로 produce·consume 하고, 범위 밖 주소의 같은 클라이언트는 연결되지 않음.
 
 [English](#english) | [한국어](#한국어)

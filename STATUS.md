@@ -1,6 +1,6 @@
 # STATUS.md
 
-**As of 2026-10-04** — all eight lab READMEs are bilingual ([#4](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/4)). Also on 2026-10-04: [#1](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/1), [#2](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/2) and [#3](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/3) closed without a re-run: the Kafka re-run, the direct-attach decision and the provider upgrade are recorded as "Not checked" in each lab's banner instead. As of 2026-10-03: `docs/labs.json` added (notes-site export, 0 labs published). As of 2026-10-02: split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10) with history.
+**As of 2026-10-04** — stale and contradictory README passages fixed in both halves ([#19](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/19)); two code problems found on the way are open. All eight lab READMEs are bilingual ([#4](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/4)). Also on 2026-10-04: [#1](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/1), [#2](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/2) and [#3](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/3) closed without a re-run: the Kafka re-run, the direct-attach decision and the provider upgrade are recorded as "Not checked" in each lab's banner instead. As of 2026-10-03: `docs/labs.json` added (notes-site export, 0 labs published). As of 2026-10-02: split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10) with history.
 
 ## CI
 
@@ -15,4 +15,5 @@ GitHub secret scanning and push protection are on.
 
 Tracked as issues — [all open](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues) · [needs a re-run](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues?q=is%3Aopen+label%3Are-verify):
 
-- [Fix stale and contradictory passages in the lab READMEs](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/19)
+- [direct-attach scripts read an output the lab does not define](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/21)
+- [nlb-ssl: the advertised-listener placeholder may never be replaced](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/22)
