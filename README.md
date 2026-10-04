@@ -8,7 +8,7 @@ Terraform labs that stand up AWS-side infrastructure for ClickHouse Cloud — Co
 
 > This repository was split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols) on the `pre-split-2026-10` tag, with history. The last version of these labs in the original repository: https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10
 
-These labs are kept, not archived, but most have not been re-run since late 2025. Each lab README opens with a **last-verified banner**; read it before you `apply`. ⚠️ marks a lab whose last run on ClickHouse Cloud failed.
+These labs are kept, not archived, but most have not been re-run since late 2025. Each lab README opens with a **last-verified banner** that also lists what was not checked; read it before you `apply`. ⚠️ marks a lab whose last run on ClickHouse Cloud failed.
 
 ### 📨 Kafka (`labs/kafka/`)
 
@@ -71,7 +71,7 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 
 > 이 저장소는 [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols)의 `pre-split-2026-10` 태그 시점에서 히스토리와 함께 분리했습니다. 원래 저장소에 있던 마지막 버전: https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10
 
-이 실습들은 archive하지 않고 유지하지만, 대부분 2025년 말 이후 다시 실행하지 않았습니다. 각 실습 README 맨 위의 **마지막 검증 배너**를 `apply` 전에 먼저 읽으세요. ⚠️는 마지막 ClickHouse Cloud 실행이 실패한 실습입니다.
+이 실습들은 archive하지 않고 유지하지만, 대부분 2025년 말 이후 다시 실행하지 않았습니다. 각 실습 README 맨 위의 **마지막 검증 배너**에는 확인하지 않은 것도 적혀 있으니 `apply` 전에 먼저 읽으세요. ⚠️는 마지막 ClickHouse Cloud 실행이 실패한 실습입니다.
 
 ### 📨 Kafka (`labs/kafka/`)
 

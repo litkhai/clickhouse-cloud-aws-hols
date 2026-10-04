@@ -1,6 +1,6 @@
 # STATUS.md
 
-**As of 2026-10-03** — `docs/labs.json` added (notes-site export, 0 labs published). As of 2026-10-02: split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10) with history.
+**As of 2026-10-04** — [#1](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/1), [#2](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/2) and [#3](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/3) closed without a re-run: the Kafka re-run, the direct-attach decision and the provider upgrade are recorded as "Not checked" in each lab's banner instead. As of 2026-10-03: `docs/labs.json` added (notes-site export, 0 labs published). As of 2026-10-02: split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10) with history.
 
 ## CI
 
@@ -15,7 +15,4 @@ GitHub secret scanning and push protection are on.
 
 Tracked as issues — [all open](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues) · [needs a re-run](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues?q=is%3Aopen+label%3Are-verify):
 
-- [Re-run the three Kafka labs (track K)](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/1)
-- [Decide what to do with terraform-chc-secures3-aws-direct-attach](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/2)
-- [Upgrade hashicorp/aws beyond ~> 5.0](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/3)
 - [Translate the seven labs](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/4)

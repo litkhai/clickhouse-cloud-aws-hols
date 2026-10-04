@@ -2,10 +2,12 @@
 
 > **Last verified: 2025-11-17** — date of the last commit made while running the lab (there is no separate run log). AWS provider `~> 5.0`.
 > No code changes since — only documentation and licence edits.
+> AWS provider: `~> 5.0` resolves to 5.100.0, the last 5.x release; never run on 6.x (6.67.0 is the newest, Terraform Registry API read 2026-10-04).
 > Provider and AWS/ClickHouse Cloud behaviour may have drifted since; expect to adjust before `apply`.
 >
 > **마지막 검증: 2025-11-17** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
 > 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
+> AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
 > 그동안 provider와 AWS·ClickHouse Cloud 동작이 달라졌을 수 있으니 `apply` 전에 조정이 필요할 수 있습니다.
 
 Simple Terraform setup to integrate ClickHouse Cloud with AWS Glue Catalog using Apache Iceberg tables.
