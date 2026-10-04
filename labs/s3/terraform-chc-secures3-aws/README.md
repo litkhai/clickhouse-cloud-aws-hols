@@ -21,7 +21,7 @@ This Terraform configuration sets up secure S3 access for ClickHouse Cloud using
 - **Secure IAM Role-Based Authentication**: No access keys needed - uses AWS IAM role assumption
 - **Read & Write Permissions**: Full support for SELECT, INSERT, and export operations
 - **S3 Table Engine Support**: Create tables backed by S3 storage in various formats (Parquet, CSV, JSON)
-- **Production-Ready**: Includes encryption, versioning, and public access blocking
+- **Bucket hardening**: Includes encryption, versioning, and public access blocking
 - **Easy Integration**: Pre-configured for ClickHouse Cloud service roles
 - **Multiple Format Support**: Parquet, CSV, JSON, and other ClickHouse-supported formats
 
@@ -77,7 +77,7 @@ export AWS_REGION="ap-northeast-2"  # Optional: Set default region
 The easiest way to deploy is using the automated deployment script:
 
 ```bash
-cd terraform-chc-secures3-aws
+cd labs/s3/terraform-chc-secures3-aws  # from the repository root
 ./deploy.sh
 ```
 
@@ -138,7 +138,7 @@ If you prefer manual configuration:
 ##### 1. Copy the example configuration:
 
 ```bash
-cd terraform-chc-secures3-aws
+cd labs/s3/terraform-chc-secures3-aws  # from the repository root
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -499,6 +499,8 @@ For a bucket with 100 GB of data:
 
 **Total**: ~$3-5/month for moderate usage
 
+These are estimates from when the lab was written, not measured; check current AWS pricing for your region.
+
 #### Cost Saving Tips
 
 1. **Use S3 Lifecycle Policies**: Move old data to cheaper storage classes
@@ -607,7 +609,7 @@ carries no warranty. The providers and services it calls have their own terms.
 - **안전한 IAM 역할 기반 인증**: 액세스 키가 필요 없습니다 - AWS IAM 역할 위임을 사용합니다
 - **읽기·쓰기 권한**: SELECT, INSERT, 내보내기 작업을 모두 지원합니다
 - **S3 테이블 엔진 지원**: 여러 형식(Parquet, CSV, JSON)의 S3 스토리지를 기반으로 하는 테이블을 만듭니다
-- **프로덕션 준비 완료(Production-Ready)**: 암호화, 버전 관리, 퍼블릭 액세스 차단을 포함합니다
+- **버킷 보호 설정**: 암호화, 버전 관리, 퍼블릭 액세스 차단을 포함합니다
 - **쉬운 통합**: ClickHouse Cloud 서비스 역할에 맞게 미리 구성되어 있습니다
 - **여러 형식 지원**: Parquet, CSV, JSON 및 ClickHouse가 지원하는 그 밖의 형식
 
@@ -663,7 +665,7 @@ export AWS_REGION="ap-northeast-2"  # 선택: 기본 리전 설정
 가장 쉬운 배포 방법은 자동 배포 스크립트를 쓰는 것입니다.
 
 ```bash
-cd terraform-chc-secures3-aws
+cd labs/s3/terraform-chc-secures3-aws  # 저장소 루트에서
 ./deploy.sh
 ```
 
@@ -724,7 +726,7 @@ ClickHouse Cloud IAM 역할 ARN을 확인합니다.
 ##### 1. 예시 구성 복사:
 
 ```bash
-cd terraform-chc-secures3-aws
+cd labs/s3/terraform-chc-secures3-aws  # 저장소 루트에서
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -1084,6 +1086,8 @@ resource "aws_s3_bucket_logging" "clickhouse_data_logging" {
 - **데이터 전송 (리전 간)**: $0.02/GB
 
 **합계**: 보통 수준으로 사용하면 ~$3-5/월
+
+실습을 작성할 때의 추정치이며 측정한 값이 아닙니다. 사용하는 리전의 현재 AWS 요금을 확인하세요.
 
 #### 비용 절감 팁
 
