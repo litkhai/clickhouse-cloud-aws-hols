@@ -3,12 +3,28 @@
 > **Last run: 2025-12-05 — not verified** — date of the last commit made while running the lab (there is no separate run log). AWS provider `~> 5.0`.
 > **That run failed on ClickHouse Cloud** (cross-account access, HTTP 403) — see the warning below.
 > No code changes since — only documentation and licence edits.
-> Provider and AWS/ClickHouse Cloud behaviour may have drifted since; expect to adjust before `apply`.
+>
+> Not checked — adjust before `apply` (recorded 2026-10-04 from reading the code; nothing was run):
+> - Never verified anywhere. The same-account and OSS cases under *When Direct Bucket Policy Works* were never run.
+> - Missing on ClickHouse Cloud: per the limitation below, ClickHouse's own role (in ClickHouse's account) would also need a permission for your bucket, which you cannot add; the 403 was not traced further. Use [terraform-chc-secures3-aws](../terraform-chc-secures3-aws/) there.
+> - Missing for an OSS or same-account check: a ClickHouse server running under an IAM role in your account, with that role's ARN in `clickhouse_iam_role_arns`. The lab creates only the bucket and its settings, the bucket policy and optional sample folders.
+> - AWS provider: `~> 5.0` resolves to 5.100.0, the last 5.x release; never run on 6.x (6.67.0 is the newest, Terraform Registry API read 2026-10-04).
+> - A re-run should show: a `SELECT` from the bucket succeeds under a role listed in `clickhouse_iam_role_arns` and returns 403 under a role that is not.
+>
+> AWS and ClickHouse Cloud behaviour may have drifted since.
 >
 > **마지막 실행: 2025-12-05 — 검증되지 않음** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
 > **이 실행은 ClickHouse Cloud에서 실패했습니다** (교차 계정 접근, HTTP 403) — 아래 경고 참고.
 > 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
-> 그동안 provider와 AWS·ClickHouse Cloud 동작이 달라졌을 수 있으니 `apply` 전에 조정이 필요할 수 있습니다.
+>
+> 확인 안 된 것 — `apply` 전에 맞출 것 (2026-10-04 코드를 읽고 기록, 실행 안 함):
+> - 어디서도 검증된 적 없음. 아래 *When Direct Bucket Policy Works*의 같은 계정·OSS 경우도 실행한 적 없음.
+> - ClickHouse Cloud에서 빠진 것: 아래 제약 설명대로라면 ClickHouse 계정에 있는 ClickHouse 쪽 role에도 이 버킷 권한이 있어야 하는데, 사용자는 그것을 추가할 수 없음. 403의 원인을 더 추적하지는 않았음. ClickHouse Cloud에서는 [terraform-chc-secures3-aws](../terraform-chc-secures3-aws/)를 쓸 것.
+> - OSS·같은 계정 확인에 빠진 것: 내 계정의 IAM role로 실행되는 ClickHouse 서버와, 그 role ARN을 넣은 `clickhouse_iam_role_arns`. 이 실습은 버킷과 그 설정, 버킷 정책, 선택적 샘플 폴더만 만듦.
+> - AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
+> - 재실행에서 보여야 할 것: `clickhouse_iam_role_arns`에 있는 role로는 버킷 `SELECT`가 성공하고, 없는 role로는 403이 남.
+>
+> 그동안 AWS·ClickHouse Cloud 동작이 달라졌을 수 있습니다.
 
 > **⚠️ WARNING: Limited ClickHouse Cloud Support**
 > This approach **does not work reliably with ClickHouse Cloud** due to cross-account limitations.
@@ -41,7 +57,7 @@ For **ClickHouse Cloud**, use the **AssumeRole method** ([terraform-chc-secures3
 
 ### When Direct Bucket Policy Works
 
-This approach works well for:
+This approach is expected to work for the cases below — none of them has been run (see the banner):
 - **Same-account scenarios** (ClickHouse running in your own AWS account)
 - **OSS ClickHouse** self-hosted on EC2 with instance roles
 - **Testing and learning** about S3 bucket policies
@@ -53,7 +69,7 @@ This approach works well for:
 - ✅ **Fewer AWS Resources**: No additional IAM role creation needed
 - ✅ **Easier Setup**: Less configuration required
 - ⚠️ **Limited Cross-Account**: May not work with ClickHouse Cloud
-- ✅ **Good for OSS**: Works well with self-hosted ClickHouse
+- ❔ **OSS (not run)**: expected to work with self-hosted ClickHouse
 
 ### AssumeRole Method (terraform-chc-secures3-aws) - **Recommended for ClickHouse Cloud**
 - ✅ **Cross-Account Compatible**: Proven to work with ClickHouse Cloud
