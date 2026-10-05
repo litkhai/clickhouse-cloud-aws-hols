@@ -10,7 +10,9 @@
 > - SASL: `user-data.sh` puts the username and password unescaped into the JAAS config and `docker-compose.yml`; every run so far used `admin` / `admin-secret`. Use letters and digits only — `"` breaks the quoting and `$` is expanded by the shell.
 > - `user-data.sh` prints the SASL password to the instance's cloud-init log.
 > - Not pinned: the AMI (newest Canonical Ubuntu 22.04 at `apply` time). Confluent images are pinned by `confluent_version` (default `7.5.0`).
-> - Run path: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start* and *Cleanup*; `deploy.sh`, `deploy-complete.sh` and `destroy.sh` also exist).
+> - Run path: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start* and *Cleanup*; `deploy.sh`, `deploy-complete.sh` and `destroy.sh` also exist). `deploy-with-cert.sh` leaves `NLB_DNS_PLACEHOLDER` in the advertised listener; only `deploy-complete.sh`, `update-advertised-listener.sh` and `manual-update-advertised-listener.sh` replace it, each followed by `docker-compose restart broker`.
+> - Potential issue ([#22](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/22)): the three scripts apply the new advertised listener with `docker-compose restart broker`, but Docker's `compose restart` reference says changes to the compose file, environment variables included, are not picked up by a restart (docs.docker.com, read 2026-10-06). `docker-compose up -d broker` recreates the container; not tried here.
+> - Potential issue, hypothesis (#22): port 9092 accepts only `allowed_cidr_blocks` (`main.tf`), so NLB health checks and forwarded traffic from other addresses may be dropped; and the NLB has no security group, so 9094 may be reachable from outside `allowed_cidr_blocks`.
 > - A re-run should show: a SASL_SSL client inside `allowed_cidr_blocks` produces and consumes through the NLB on port 9094, and the same client from an address outside it cannot connect.
 >
 > **마지막 검증: 2025-11-20** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
@@ -23,22 +25,24 @@
 > - SASL: `user-data.sh`가 사용자명·비밀번호를 이스케이프 없이 JAAS 설정과 `docker-compose.yml`에 넣음. 지금까지 실행은 모두 `admin` / `admin-secret`. 영문자와 숫자만 쓸 것 — `"`는 따옴표를 깨고 `$`는 셸이 치환함.
 > - `user-data.sh`가 SASL 비밀번호를 인스턴스의 cloud-init 로그에 출력함.
 > - 고정 안 된 것: AMI (`apply` 시점의 최신 Canonical Ubuntu 22.04). Confluent 이미지는 `confluent_version`(기본 `7.5.0`)으로 고정.
-> - 실행 경로: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start*·*Cleanup*. `deploy.sh`, `deploy-complete.sh`, `destroy.sh`도 있음).
+> - 실행 경로: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start*·*Cleanup*. `deploy.sh`, `deploy-complete.sh`, `destroy.sh`도 있음). `deploy-with-cert.sh`는 advertised listener의 `NLB_DNS_PLACEHOLDER`를 그대로 둠. 이 값을 바꾸는 것은 `deploy-complete.sh`, `update-advertised-listener.sh`, `manual-update-advertised-listener.sh`뿐이고, 셋 다 바꾼 뒤 `docker-compose restart broker`를 실행함.
+> - 잠재 문제 ([#22](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/22)): 세 스크립트 모두 새 advertised listener를 `docker-compose restart broker`로 적용하는데, Docker의 `compose restart` 레퍼런스는 환경 변수를 포함한 compose 파일 변경이 restart로는 반영되지 않는다고 함 (docs.docker.com, 2026-10-06 확인). `docker-compose up -d broker`는 컨테이너를 다시 만듦. 여기서는 시도하지 않음.
+> - 잠재 문제, 가설 (#22): 9092 포트는 `allowed_cidr_blocks`만 받으므로(`main.tf`) 다른 주소에서 오는 NLB 헬스 체크·전달 트래픽이 막힐 수 있음. 또 NLB에 보안 그룹이 없어 9094가 `allowed_cidr_blocks` 밖에서도 열려 있을 수 있음.
 > - 재실행에서 보여야 할 것: `allowed_cidr_blocks` 안의 SASL_SSL 클라이언트가 NLB 9094 포트로 produce·consume 하고, 범위 밖 주소의 같은 클라이언트는 연결되지 않음.
 
 [English](#english) | [한국어](#한국어)
 
 ## English
 
-### ✅ **SOLUTION: Advertised Listener Fix**
+### Advertised Listener Fix
 
-This Terraform configuration demonstrates **NLB SSL termination with Kafka** using the **advertised listener pattern**.
+This Terraform configuration sets up **NLB SSL termination in front of Kafka** using the **advertised listener pattern**.
 
-**TL;DR**: By configuring Kafka to advertise the NLB DNS instead of EC2 DNS, clients maintain protocol consistency throughout their connection lifecycle.
+**TL;DR**: Kafka is configured to advertise the NLB DNS instead of the EC2 DNS, so that clients keep connecting through the NLB, with the same protocol, for their whole connection lifecycle.
 
-See [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md) for detailed explanation of the solution.
+See [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md) for detailed explanation of the solution. That record (committed 2025-11-20) describes the change and the flow it expects; no result of a run with this configuration is recorded in the lab. The failure recorded in [TESTING_RESULTS.md](TESTING_RESULTS.md) the same day was with the earlier configuration, which advertised the EC2 DNS (see *Earlier Test Results* below).
 
-### Architecture (Working Solution)
+### Architecture
 
 ```
 External Client (SASL_SSL)
@@ -49,17 +53,17 @@ External Client (SASL_SSL)
         ↓
     Kafka advertises: "I'm at NLB:9094"  ← Key fix!
         ↓
-    Client → NLB:9094 (SASL_SSL)  ← ✅ Works! Stays at NLB
+    Client → NLB:9094 (SASL_SSL)  ← Stays at NLB (expected)
 ```
 
-**Solution**: Kafka advertises NLB:9094 instead of EC2:9092, keeping clients at the NLB where SSL is handled.
+**Solution**: Kafka advertises NLB:9094 instead of EC2:9092, to keep clients at the NLB where SSL is handled. The NLB DNS is filled in after `terraform apply` (see *Architecture Details › Kafka Configuration*).
 
 #### Key Features (What Was Tested)
 
 1. **Kafka Broker**: Configured with SASL_PLAINTEXT (NO TLS encryption)
 2. **NLB**: Provides SSL/TLS termination on port 9094
 3. **Expected Behavior**: Clients connect to NLB with SSL, NLB forwards to Kafka without encryption
-4. **Actual Behavior**: ❌ Clients fail after metadata fetch due to protocol mismatch
+4. **Recorded Behavior** ([TESTING_RESULTS.md](TESTING_RESULTS.md), 2025-11-20, with Kafka advertising EC2:9092): ❌ Clients failed after the metadata fetch due to a protocol mismatch. The advertised listener change above came after this run.
 
 #### Why This Architecture Was Tested
 
@@ -69,7 +73,7 @@ This setup was meant to test:
 - Centralized certificate management at NLB
 - Testing scenarios where SSL is handled by network infrastructure
 
-**Result**: ❌ This approach is incompatible with Kafka's advertised listener mechanism
+**Result**: the run in [TESTING_RESULTS.md](TESTING_RESULTS.md) failed while Kafka advertised the EC2 DNS (see *Earlier Test Results* below); the current code advertises the NLB DNS instead.
 
 ### Prerequisites
 
@@ -260,7 +264,7 @@ python3 test_nlb.py
 - **Port 9092**: SASL_PLAINTEXT listener (no TLS)
 - **Port 29092**: Internal PLAINTEXT listener (for Confluent components)
 - **SASL Mechanism**: PLAIN
-- **Broker Advertised Listener**: Uses EC2 public DNS
+- **Broker Advertised Listener**: `SASL_PLAINTEXT://<NLB_DNS>:9094` (and `PLAINTEXT://broker:29092` inside the Docker network). `user-data.sh` starts the broker with `NLB_DNS_PLACEHOLDER` in place of the NLB DNS; `deploy-complete.sh` (step 6), `update-advertised-listener.sh` and `manual-update-advertised-listener.sh` replace it in `/opt/confluent/docker-compose.yml` over SSH and run `docker-compose restart broker`. `deploy-with-cert.sh` does not run this step.
 
 #### NLB Configuration
 
@@ -327,11 +331,11 @@ terraform destroy
 
 #### NLB Health Check Failing
 
-Check if Kafka is listening on port 9092:
+The NLB health check is a TCP connection to port 9092 on the instance (`health_check` in `main.tf`). Check that port 9092 accepts connections:
 
 ```bash
 ssh -i your-key.pem ubuntu@<EC2_DNS>
-docker exec broker kafka-broker-api-versions --bootstrap-server localhost:29092
+timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/9092' && echo "port 9092 open"
 ```
 
 #### SSL Connection Issues
@@ -347,11 +351,11 @@ docker exec broker kafka-broker-api-versions --bootstrap-server localhost:29092
 3. Test direct connection to EC2:9092 first
 4. Check Kafka logs: `docker logs broker`
 
-### Architecture Limitations & Test Results
+### Earlier Test Results (EC2 Advertised Listener)
 
-#### ⚠️ **IMPORTANT: This Architecture Has Fundamental Limitations**
+#### Source of These Results
 
-This project was created to **test NLB SSL termination with Kafka**, but testing revealed a **critical architectural flaw** that prevents it from working correctly with most Kafka clients.
+This project was created to **test NLB SSL termination with Kafka**. The run recorded in [TESTING_RESULTS.md](TESTING_RESULTS.md) (test date 2025-11-20) found a **protocol mismatch** while Kafka advertised `EC2_DNS:9092`: clients that connected through the NLB failed. The current code advertises the NLB DNS instead ([NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md)); this section describes the earlier configuration.
 
 #### Test Objective
 
@@ -360,9 +364,9 @@ The goal was to test whether we could:
 2. Keep Kafka broker without TLS (SASL_PLAINTEXT only)
 3. Allow external clients to connect securely via NLB with SASL_SSL
 
-#### Why It Fails
+#### Why It Failed
 
-**The Problem**: Kafka's advertised listener mechanism is incompatible with this SSL termination approach.
+**The Problem**: with the EC2 DNS advertised, Kafka's advertised listener mechanism sent clients to an address that bypasses the NLB's SSL termination.
 
 **Failure Flow**:
 ```
@@ -376,22 +380,22 @@ The goal was to test whether we could:
 ```
 
 **Root Cause**:
-- Kafka advertises its listener as `EC2_DNS:9092`
-- When clients fetch metadata through the NLB, they get redirected to connect directly to EC2:9092
-- Clients try to connect to EC2:9092 with SASL_SSL (since they initially connected via SSL)
+- Kafka advertised its listener as `EC2_DNS:9092`
+- When clients fetched metadata through the NLB, they got redirected to connect directly to EC2:9092
+- Clients tried to connect to EC2:9092 with SASL_SSL (since they initially connected via SSL)
 - But Kafka:9092 only supports SASL_PLAINTEXT
 - Result: Protocol mismatch and connection failure
 
 #### Test Results
 
-**Direct EC2 Connection (SASL_PLAINTEXT)**: ✅ **Works perfectly**
+**Direct EC2 Connection (SASL_PLAINTEXT)**: ✅ **Succeeded**
 ```bash
 bootstrap.servers: ec2-xxx.amazonaws.com:9092
 security.protocol: SASL_PLAINTEXT
 # Successfully connects and produces/consumes
 ```
 
-**NLB Connection (SASL_SSL)**: ❌ **Fails**
+**NLB Connection (SASL_SSL)**: ❌ **Failed**
 ```bash
 bootstrap.servers: nlb-xxx.elb.amazonaws.com:9094
 security.protocol: SASL_SSL
@@ -400,20 +404,20 @@ security.protocol: SASL_SSL
 # Error: "SSL handshake failed: connecting to a PLAINTEXT broker listener?"
 ```
 
-#### Why This Architecture Doesn't Work
+#### Why the EC2-Advertised Configuration Did Not Work
 
 Kafka's design requires that:
 1. The advertised listener protocol must match what clients use to connect
 2. Clients will be redirected to the advertised listener address after initial connection
 3. All subsequent connections must use the same security protocol
 
-With NLB SSL termination:
+With NLB SSL termination and the EC2 DNS advertised:
 - NLB terminates SSL and forwards PLAINTEXT to Kafka ✓
 - Kafka advertises PLAINTEXT listener (EC2:9092) ✓
 - Client connects with SASL_SSL via NLB ✓
 - Client gets redirected to EC2:9092 with SASL_SSL ❌ (protocol mismatch!)
 
-#### Correct Architectures for SSL with Kafka
+#### Other Architectures for SSL with Kafka
 
 ##### Option 1: End-to-End Encryption (Recommended)
 ```
@@ -446,33 +450,33 @@ Client (SASL_PLAINTEXT) → Kafka (SASL_PLAINTEXT on 9092)
 - Automated certificate generation matching NLB DNS
 - Terraform infrastructure for Confluent Platform on AWS
 
-❌ **Does NOT work for**:
-- External Kafka clients connecting via NLB with SSL
-- Production use cases requiring SSL/TLS encryption
-- ClickHouse ClickPipes or other Kafka clients expecting SASL_SSL
+❌ **Not recorded or not provided**:
+- External Kafka clients connecting via NLB with SSL: no run after the advertised listener change is recorded
+- Encryption between the NLB and the broker: Kafka:9092 is SASL_PLAINTEXT
+- ClickHouse ClickPipes: not tested; [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md) lists it as a next step
 
 #### Conclusion
 
-**This architecture is a proof-of-concept that reveals an important limitation**: NLB SSL termination is **incompatible** with Kafka's advertised listener mechanism.
+**This architecture is a proof-of-concept.** The run in [TESTING_RESULTS.md](TESTING_RESULTS.md) showed NLB SSL termination failing while Kafka advertised the EC2 DNS. The current code advertises the NLB DNS, as described in [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md); that record gives the expected flow, not the result of a run.
 
 For production Kafka deployments requiring SSL:
 - Use end-to-end encryption with Kafka handling SSL directly
 - Or use NLB in TCP passthrough mode (not TLS termination mode)
-- See our `terraform-confluent-aws` project for a working SSL implementation
+- See our `terraform-confluent-aws` project for SSL on the broker itself
 
 This project remains useful as:
 - A learning exercise about Kafka networking and SSL
 - Infrastructure template for Confluent Platform on AWS
-- Documentation of what doesn't work and why
+- Documentation of why the EC2-advertised configuration failed
 
 ### Important Notes
 
-- ⚠️ **This architecture does NOT work for external Kafka clients** - See "Architecture Limitations" above
+- ⚠️ **No recorded run of the NLB-advertised configuration** - The failure in [TESTING_RESULTS.md](TESTING_RESULTS.md) is from the earlier EC2-advertised configuration; see "Earlier Test Results" above
 - ⚠️ **TLS is disabled on Kafka broker** - Only NLB provides SSL termination
-- ⚠️ **Kafka advertised listener uses EC2 DNS** - Clients get redirected to EC2:9092 (PLAINTEXT)
-- ⚠️ **Protocol mismatch** - Clients expect SASL_SSL but Kafka only speaks SASL_PLAINTEXT
-- ✅ **Direct EC2 connection works** - Use SASL_PLAINTEXT to connect directly to EC2:9092
-- ℹ️ **For working SSL setup** - See terraform-confluent-aws project instead
+- ⚠️ **Kafka advertises the NLB DNS only after the placeholder is replaced** - Until then the broker advertises `NLB_DNS_PLACEHOLDER:9094` (see "Kafka Configuration" above)
+- ⚠️ **SASL_SSL only through the NLB** - Kafka:9092 speaks SASL_PLAINTEXT only; SASL_SSL clients have to connect through the NLB TLS listener on 9094
+- ℹ️ **Direct EC2 connection** - [TESTING_RESULTS.md](TESTING_RESULTS.md) records SASL_PLAINTEXT to EC2:9092 succeeding while EC2:9092 was advertised; with the NLB DNS advertised, the broker returns NLB:9094 in metadata to these clients too
+- ℹ️ **For SSL on the broker itself** - See terraform-confluent-aws project instead
 - ℹ️ **Certificate auto-generated** - Matches NLB DNS automatically during deployment
 - ℹ️ Self-signed certificate is used - Not suitable for production
 
@@ -485,6 +489,8 @@ Approximate AWS costs (us-east-1):
 - Data transfer: Variable
 
 **Estimated monthly cost**: ~$190-220 (if running 24/7)
+
+These are estimates from when the lab was written, not measured; check current AWS pricing for your region.
 
 ### Differences from terraform-confluent-aws
 
@@ -530,15 +536,15 @@ See [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md) for:
 
 ## 한국어
 
-### ✅ **해결책: advertised listener 수정**
+### advertised listener 수정
 
-이 Terraform 구성은 **advertised listener 패턴**으로 **Kafka와 NLB SSL 종료**를 시연합니다.
+이 Terraform 구성은 **advertised listener 패턴**으로 **Kafka 앞단에 NLB SSL 종료**를 구성합니다.
 
-**TL;DR**: Kafka가 EC2 DNS 대신 NLB DNS를 advertise하도록 구성하면, 클라이언트는 연결의 전체 수명 동안 같은 프로토콜을 유지합니다.
+**TL;DR**: Kafka가 EC2 DNS 대신 NLB DNS를 advertise하도록 구성되어 있어, 클라이언트는 연결의 전체 수명 동안 같은 프로토콜로 계속 NLB를 거쳐 연결합니다.
 
-해결책에 대한 자세한 설명은 [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md)를 참고하세요.
+해결책에 대한 자세한 설명은 [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md)를 참고하세요. 이 기록(2025-11-20 커밋)은 변경 내용과 기대하는 흐름을 설명하며, 이 구성으로 실행한 결과는 실습에 기록되어 있지 않습니다. 같은 날 [TESTING_RESULTS.md](TESTING_RESULTS.md)에 기록된 실패는 EC2 DNS를 advertise하던 이전 구성에서 나온 것입니다 (아래 *이전 테스트 결과* 참고).
 
-### 아키텍처 (동작하는 해결책)
+### 아키텍처
 
 ```
 External Client (SASL_SSL)
@@ -549,17 +555,17 @@ External Client (SASL_SSL)
         ↓
     Kafka advertises: "I'm at NLB:9094"  ← Key fix!
         ↓
-    Client → NLB:9094 (SASL_SSL)  ← ✅ Works! Stays at NLB
+    Client → NLB:9094 (SASL_SSL)  ← Stays at NLB (expected)
 ```
 
-**해결책**: Kafka가 EC2:9092 대신 NLB:9094를 advertise하므로, 클라이언트는 SSL을 처리하는 NLB에 머뭅니다.
+**해결책**: Kafka가 EC2:9092 대신 NLB:9094를 advertise해서, 클라이언트가 SSL을 처리하는 NLB에 머물도록 합니다. NLB DNS는 `terraform apply` 뒤에 채워집니다 (*아키텍처 상세 › Kafka 구성* 참고).
 
 #### 주요 기능 (테스트한 것)
 
 1. **Kafka 브로커**: SASL_PLAINTEXT로 구성 (TLS 암호화 없음)
 2. **NLB**: 9094 포트에서 SSL/TLS 종료를 제공
 3. **기대한 동작**: 클라이언트가 SSL로 NLB에 연결하고, NLB는 암호화 없이 Kafka로 전달
-4. **실제 동작**: ❌ 프로토콜 불일치 때문에 클라이언트가 메타데이터를 가져온 뒤 실패
+4. **기록된 동작** ([TESTING_RESULTS.md](TESTING_RESULTS.md), 2025-11-20, Kafka가 EC2:9092를 advertise하던 때): ❌ 프로토콜 불일치 때문에 클라이언트가 메타데이터를 가져온 뒤 실패했습니다. 위의 advertised listener 변경은 이 실행 뒤에 이루어졌습니다.
 
 #### 이 아키텍처를 테스트한 이유
 
@@ -569,7 +575,7 @@ External Client (SASL_SSL)
 - NLB에서의 중앙 집중식 인증서 관리
 - 네트워크 인프라가 SSL을 처리하는 시나리오 테스트
 
-**결과**: ❌ 이 방식은 Kafka의 advertised listener 메커니즘과 호환되지 않습니다
+**결과**: [TESTING_RESULTS.md](TESTING_RESULTS.md)의 실행은 Kafka가 EC2 DNS를 advertise하던 때 실패했습니다 (아래 *이전 테스트 결과* 참고). 지금 코드는 대신 NLB DNS를 advertise합니다.
 
 ### 사전 준비
 
@@ -760,7 +766,7 @@ python3 test_nlb.py
 - **포트 9092**: SASL_PLAINTEXT 리스너 (TLS 없음)
 - **포트 29092**: 내부 PLAINTEXT 리스너 (Confluent 구성 요소용)
 - **SASL 메커니즘**: PLAIN
-- **브로커 advertised listener**: EC2 퍼블릭 DNS 사용
+- **브로커 advertised listener**: `SASL_PLAINTEXT://<NLB_DNS>:9094` (Docker 네트워크 안에서는 `PLAINTEXT://broker:29092`). `user-data.sh`는 NLB DNS 자리에 `NLB_DNS_PLACEHOLDER`를 넣은 채로 브로커를 시작합니다. `deploy-complete.sh`(6단계), `update-advertised-listener.sh`, `manual-update-advertised-listener.sh`가 SSH로 `/opt/confluent/docker-compose.yml`에서 이 값을 바꾸고 `docker-compose restart broker`를 실행합니다. `deploy-with-cert.sh`는 이 단계를 실행하지 않습니다.
 
 #### NLB 구성
 
@@ -827,11 +833,11 @@ terraform destroy
 
 #### NLB 헬스 체크 실패
 
-Kafka가 9092 포트에서 리슨하고 있는지 확인합니다.
+NLB 헬스 체크는 인스턴스의 9092 포트로 TCP 연결을 맺는 방식입니다 (`main.tf`의 `health_check`). 9092 포트가 연결을 받는지 확인합니다.
 
 ```bash
 ssh -i your-key.pem ubuntu@<EC2_DNS>
-docker exec broker kafka-broker-api-versions --bootstrap-server localhost:29092
+timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/9092' && echo "port 9092 open"
 ```
 
 #### SSL 연결 문제
@@ -847,11 +853,11 @@ docker exec broker kafka-broker-api-versions --bootstrap-server localhost:29092
 3. 먼저 EC2:9092로 직접 연결을 테스트합니다
 4. Kafka 로그를 확인합니다: `docker logs broker`
 
-### 아키텍처 한계와 테스트 결과
+### 이전 테스트 결과 (EC2 advertised listener)
 
-#### ⚠️ **중요: 이 아키텍처에는 근본적인 한계가 있습니다**
+#### 이 결과의 출처
 
-이 프로젝트는 **Kafka와 NLB SSL 종료를 테스트**하려고 만들었지만, 테스트에서 대부분의 Kafka 클라이언트와 올바르게 동작하지 못하게 하는 **치명적인 아키텍처 결함**이 드러났습니다.
+이 프로젝트는 **Kafka와 NLB SSL 종료를 테스트**하려고 만들었습니다. [TESTING_RESULTS.md](TESTING_RESULTS.md)에 기록된 실행(테스트 날짜 2025-11-20)에서는 Kafka가 `EC2_DNS:9092`를 advertise하던 때 **프로토콜 불일치**가 드러났고, NLB를 거쳐 연결한 클라이언트가 실패했습니다. 지금 코드는 대신 NLB DNS를 advertise합니다 ([NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md)). 이 절은 이전 구성을 설명합니다.
 
 #### 테스트 목표
 
@@ -860,9 +866,9 @@ docker exec broker kafka-broker-api-versions --bootstrap-server localhost:29092
 2. Kafka 브로커는 TLS 없이 유지 (SASL_PLAINTEXT만)
 3. 외부 클라이언트가 NLB를 거쳐 SASL_SSL로 안전하게 연결
 
-#### 실패하는 이유
+#### 실패한 이유
 
-**문제**: Kafka의 advertised listener 메커니즘은 이 SSL 종료 방식과 호환되지 않습니다.
+**문제**: EC2 DNS를 advertise하면, Kafka의 advertised listener 메커니즘이 클라이언트를 NLB의 SSL 종료를 거치지 않는 주소로 보냈습니다.
 
 **실패 흐름**:
 ```
@@ -876,15 +882,15 @@ docker exec broker kafka-broker-api-versions --bootstrap-server localhost:29092
 ```
 
 **근본 원인**:
-- Kafka는 자신의 리스너를 `EC2_DNS:9092`로 advertise합니다
-- 클라이언트가 NLB를 통해 메타데이터를 가져오면, EC2:9092에 직접 연결하도록 리디렉션됩니다
-- 클라이언트는 (처음에 SSL로 연결했으므로) EC2:9092에 SASL_SSL로 연결하려고 합니다
+- Kafka는 자신의 리스너를 `EC2_DNS:9092`로 advertise했습니다
+- 클라이언트가 NLB를 통해 메타데이터를 가져오자, EC2:9092에 직접 연결하도록 리디렉션되었습니다
+- 클라이언트는 (처음에 SSL로 연결했으므로) EC2:9092에 SASL_SSL로 연결하려고 했습니다
 - 하지만 Kafka:9092는 SASL_PLAINTEXT만 지원합니다
 - 결과: 프로토콜 불일치와 연결 실패
 
 #### 테스트 결과
 
-**EC2 직접 연결 (SASL_PLAINTEXT)**: ✅ **완벽하게 동작**
+**EC2 직접 연결 (SASL_PLAINTEXT)**: ✅ **성공**
 ```bash
 bootstrap.servers: ec2-xxx.amazonaws.com:9092
 security.protocol: SASL_PLAINTEXT
@@ -900,20 +906,20 @@ security.protocol: SASL_SSL
 # 오류: "SSL handshake failed: connecting to a PLAINTEXT broker listener?"
 ```
 
-#### 이 아키텍처가 동작하지 않는 이유
+#### EC2를 advertise한 구성이 동작하지 않은 이유
 
 Kafka의 설계는 다음을 요구합니다.
 1. advertised listener의 프로토콜이 클라이언트가 연결에 쓰는 프로토콜과 일치해야 합니다
 2. 클라이언트는 초기 연결 뒤 advertised listener 주소로 리디렉션됩니다
 3. 이후의 모든 연결은 같은 보안 프로토콜을 써야 합니다
 
-NLB SSL 종료를 쓰면:
+NLB SSL 종료와 함께 EC2 DNS를 advertise하면:
 - NLB가 SSL을 종료하고 Kafka로 PLAINTEXT를 전달 ✓
 - Kafka가 PLAINTEXT 리스너(EC2:9092)를 advertise ✓
 - 클라이언트가 NLB를 거쳐 SASL_SSL로 연결 ✓
 - 클라이언트가 SASL_SSL인 채로 EC2:9092로 리디렉션됨 ❌ (프로토콜 불일치!)
 
-#### Kafka에서 SSL을 쓰는 올바른 아키텍처
+#### Kafka에서 SSL을 쓰는 다른 아키텍처
 
 ##### 옵션 1: 종단 간 암호화 (권장)
 ```
@@ -946,33 +952,33 @@ Client (SASL_PLAINTEXT) → Kafka (SASL_PLAINTEXT on 9092)
 - NLB DNS와 일치하는 인증서의 자동 생성
 - AWS에서 Confluent Platform을 위한 Terraform 인프라
 
-❌ **동작하지 않는 것**:
-- NLB를 거쳐 SSL로 연결하는 외부 Kafka 클라이언트
-- SSL/TLS 암호화가 필요한 프로덕션 사용 사례
-- SASL_SSL을 기대하는 ClickHouse ClickPipes나 다른 Kafka 클라이언트
+❌ **기록되지 않았거나 제공하지 않는 것**:
+- NLB를 거쳐 SSL로 연결하는 외부 Kafka 클라이언트: advertised listener 변경 뒤의 실행 기록이 없음
+- NLB와 브로커 사이의 암호화: Kafka:9092는 SASL_PLAINTEXT
+- ClickHouse ClickPipes: 테스트 안 함. [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md)가 다음 단계로 적어 둠
 
 #### 결론
 
-**이 아키텍처는 중요한 한계를 드러내는 개념 증명(proof-of-concept)입니다**: NLB SSL 종료는 Kafka의 advertised listener 메커니즘과 **호환되지 않습니다**.
+**이 아키텍처는 개념 증명(proof-of-concept)입니다.** [TESTING_RESULTS.md](TESTING_RESULTS.md)의 실행은 Kafka가 EC2 DNS를 advertise하던 때 NLB SSL 종료가 실패하는 것을 보여 주었습니다. 지금 코드는 [NLB_ADVERTISED_LISTENER_FIX.md](NLB_ADVERTISED_LISTENER_FIX.md)에 설명된 대로 NLB DNS를 advertise합니다. 이 기록은 기대하는 흐름을 담고 있으며, 실행 결과가 아닙니다.
 
 SSL이 필요한 프로덕션 Kafka 배포에서는:
 - Kafka가 SSL을 직접 처리하는 종단 간 암호화를 사용합니다
 - 또는 NLB를 TCP 패스스루 모드(TLS 종료 모드가 아님)로 사용합니다
-- 동작하는 SSL 구현은 우리의 `terraform-confluent-aws` 프로젝트를 참고하세요
+- 브로커 자체의 SSL은 우리의 `terraform-confluent-aws` 프로젝트를 참고하세요
 
 이 프로젝트는 여전히 다음 용도로 쓸모가 있습니다.
 - Kafka 네트워킹과 SSL에 대한 학습 연습
 - AWS에서 Confluent Platform을 위한 인프라 템플릿
-- 무엇이 동작하지 않고 왜 그런지에 대한 기록
+- EC2를 advertise한 구성이 왜 실패했는지에 대한 기록
 
 ### 중요 참고 사항
 
-- ⚠️ **이 아키텍처는 외부 Kafka 클라이언트에서 동작하지 않습니다** - 위의 "아키텍처 한계"를 참고하세요
+- ⚠️ **NLB를 advertise하는 구성의 실행 기록이 없습니다** - [TESTING_RESULTS.md](TESTING_RESULTS.md)의 실패는 EC2를 advertise하던 이전 구성에서 나온 것입니다. 위의 "이전 테스트 결과"를 참고하세요
 - ⚠️ **Kafka 브로커에서 TLS가 비활성화되어 있습니다** - SSL 종료는 NLB만 제공합니다
-- ⚠️ **Kafka advertised listener가 EC2 DNS를 사용합니다** - 클라이언트가 EC2:9092(PLAINTEXT)로 리디렉션됩니다
-- ⚠️ **프로토콜 불일치** - 클라이언트는 SASL_SSL을 기대하지만 Kafka는 SASL_PLAINTEXT만 사용합니다
-- ✅ **EC2 직접 연결은 동작합니다** - SASL_PLAINTEXT로 EC2:9092에 직접 연결하세요
-- ℹ️ **동작하는 SSL 구성이 필요하면** - 대신 terraform-confluent-aws 프로젝트를 참고하세요
+- ⚠️ **플레이스홀더를 바꾼 뒤에야 Kafka가 NLB DNS를 advertise합니다** - 그 전까지 브로커는 `NLB_DNS_PLACEHOLDER:9094`를 advertise합니다 (위의 "Kafka 구성" 참고)
+- ⚠️ **SASL_SSL은 NLB를 거쳐서만** - Kafka:9092는 SASL_PLAINTEXT만 사용하므로, SASL_SSL 클라이언트는 9094 포트의 NLB TLS 리스너를 거쳐 연결해야 합니다
+- ℹ️ **EC2 직접 연결** - [TESTING_RESULTS.md](TESTING_RESULTS.md)는 EC2:9092를 advertise하던 때 SASL_PLAINTEXT로 EC2:9092에 연결해 성공한 것을 기록합니다. NLB DNS를 advertise하면 브로커는 이 클라이언트에도 메타데이터로 NLB:9094를 돌려줍니다
+- ℹ️ **브로커 자체의 SSL이 필요하면** - 대신 terraform-confluent-aws 프로젝트를 참고하세요
 - ℹ️ **인증서 자동 생성** - 배포 중 NLB DNS와 자동으로 일치시킵니다
 - ℹ️ 자체 서명 인증서를 사용합니다 - 프로덕션에는 적합하지 않습니다
 
@@ -985,6 +991,8 @@ SSL이 필요한 프로덕션 Kafka 배포에서는:
 - 데이터 전송: 사용량에 따라 다름
 
 **예상 월 비용**: ~$190-220 (24/7로 실행할 경우)
+
+실습을 작성할 때의 추정치이며 측정한 값이 아닙니다. 사용하는 리전의 현재 AWS 요금을 확인하세요.
 
 ### terraform-confluent-aws와의 차이
 

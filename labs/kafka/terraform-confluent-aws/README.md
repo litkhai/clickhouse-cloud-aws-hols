@@ -37,7 +37,7 @@ This Terraform configuration deploys a complete Confluent Platform stack on AWS 
 - **Complete Confluent Platform**: All core components (Kafka, ZooKeeper, Schema Registry, Connect, ksqlDB, Control Center, REST Proxy)
 - **Automated Setup**: One-command deployment with Docker Compose
 - **Sample Data Producer**: Automatically generates sample data to a Kafka topic
-- **Production-Ready**: Configurable instance types, EBS volumes, and security groups
+- **Configurable**: instance types, EBS volumes, and the CIDR blocks the security group allows
 - **Easy Management**: Scripts for start, stop, and status checking
 
 ### Prerequisites
@@ -63,7 +63,8 @@ export AWS_REGION="us-east-1"  # Optional: Set default region
 #### 1. Clone and Navigate
 
 ```bash
-cd terraform-confluent-aws
+git clone https://github.com/litkhai/clickhouse-cloud-aws-hols.git
+cd clickhouse-cloud-aws-hols/labs/kafka/terraform-confluent-aws
 ```
 
 #### 2. Configure Variables
@@ -116,7 +117,7 @@ Open the URL in your browser to access the Confluent Control Center Web UI.
 
 1. **EC2 Instance**: Ubuntu 22.04 LTS with Docker
 2. **ZooKeeper**: Cluster coordination (port 2181)
-3. **Kafka Broker**: Message streaming (port 9092)
+3. **Kafka Broker**: Message streaming (ports 9092 and 9093)
 4. **Schema Registry**: Schema management (port 8081)
 5. **Kafka Connect**: Data integration (port 8083)
 6. **ksqlDB**: Stream processing (port 8088)
@@ -126,12 +127,13 @@ Open the URL in your browser to access the Confluent Control Center Web UI.
 
 #### Network Configuration
 
-The deployment creates a security group with the following ingress rules:
+The deployment creates a security group with the following ingress rules, each open to `allowed_cidr_blocks` only:
 
 | Port | Service | Description |
 |------|---------|-------------|
 | 2181 | ZooKeeper | Cluster coordination |
-| 9092 | Kafka | Broker access (internal and external) |
+| 9092 | Kafka | `SASL_SSL` broker access (external) |
+| 9093 | Kafka | `SASL_PLAINTEXT` broker access (external) |
 | 8081 | Schema Registry | Schema management API |
 | 8083 | Kafka Connect | Connect API |
 | 8088 | ksqlDB | ksqlDB API |
@@ -141,16 +143,17 @@ The deployment creates a security group with the following ingress rules:
 
 #### SASL Authentication
 
-The Kafka broker is configured with **SASL/PLAIN authentication** on port **9092** for external clients.
+The Kafka broker is configured with **SASL/PLAIN authentication** on ports **9092** (`SASL_SSL`) and **9093** (`SASL_PLAINTEXT`) for external clients.
 
 **Authentication Details:**
-- **Security Protocol**: `SASL_PLAINTEXT`
+- **Security Protocol**: `SASL_SSL` (port 9092, TLS) or `SASL_PLAINTEXT` (port 9093, no encryption)
 - **SASL Mechanism**: `PLAIN`
-- **Default Credentials**: Configured via `kafka_sasl_username` and `kafka_sasl_password` variables
+- **Credentials**: `kafka_sasl_username` (default `admin`) and `kafka_sasl_password` (required, no default)
 
 **Listener Architecture:**
 - **Internal (PLAINTEXT)**: `broker:29092` - Used by Control Center, Schema Registry, Connect (no authentication)
-- **External (SASL_PLAINTEXT)**: `<PUBLIC_IP>:9092` - Used by external clients (requires SASL authentication)
+- **External (SASL_SSL)**: `<PUBLIC_DNS>:9092` - Used by external clients (requires SASL authentication, TLS)
+- **External (SASL_PLAINTEXT)**: `<PUBLIC_DNS>:9093` - Used by external clients (requires SASL authentication, no encryption)
 
 This architecture mirrors **Confluent Cloud's authentication model**, making it ideal for ClickHouse integration workshops and hands-on labs.
 
@@ -196,7 +199,7 @@ For detailed connection examples in Python, Java, Go, Node.js, and ClickHouse, s
 | `sample_topic_name` | Sample topic name | "sample-data-topic" | No |
 | `data_producer_interval` | Data production interval (seconds) | 5 | No |
 | `kafka_sasl_username` | Kafka SASL username | "admin" | No |
-| `kafka_sasl_password` | Kafka SASL password | "admin-secret" | No |
+| `kafka_sasl_password` | Kafka SASL password (sensitive) | - | **Yes** |
 
 #### Instance Type Recommendations
 
@@ -240,16 +243,19 @@ sudo journalctl -u confluent-producer -f
 
 ##### Understanding Kafka Listeners
 
-Kafka is configured with **two listeners**:
+Kafka is configured with **three listeners**:
 
-- **PLAINTEXT (port 29092)**: Internal Docker network communication
-- **EXTERNAL (port 9092)**: External client access (from anywhere, including localhost)
+- **PLAINTEXT (port 29092)**: Internal Docker network communication, no authentication (not published to the host)
+- **SASL_SSL (port 9092)**: External client access with SASL/PLAIN over TLS (from `allowed_cidr_blocks`)
+- **SASL_PLAINTEXT (port 9093)**: External client access with SASL/PLAIN, no encryption (from `allowed_cidr_blocks`)
+
+The commands below run inside the broker container and use the internal listener `localhost:29092`, which needs no client settings.
 
 ##### List Topics (from SSH)
 
 ```bash
 # From inside the instance
-docker exec broker kafka-topics --list --bootstrap-server localhost:9092
+docker exec broker kafka-topics --list --bootstrap-server localhost:29092
 ```
 
 ##### Consume Messages (from SSH)
@@ -257,7 +263,7 @@ docker exec broker kafka-topics --list --bootstrap-server localhost:9092
 ```bash
 # From inside the instance
 docker exec broker kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
+  --bootstrap-server localhost:29092 \
   --topic sample-data-topic \
   --from-beginning
 ```
@@ -267,19 +273,20 @@ docker exec broker kafka-console-consumer \
 ```bash
 # From inside the instance
 docker exec -i broker kafka-console-producer \
-  --broker-list localhost:9092 \
+  --broker-list localhost:29092 \
   --topic sample-data-topic
 ```
 
 #### Connecting from External Applications
 
-External clients connect using port **9092** (same as Confluent Cloud):
+External clients connect on port **9092** (`SASL_SSL`, same as Confluent Cloud) or **9093** (`SASL_PLAINTEXT`):
 
 ```bash
-# Get the external bootstrap server
-terraform output kafka_bootstrap_servers
+# Get the external bootstrap servers
+terraform output kafka_bootstrap_servers             # SASL_SSL, port 9092
+terraform output kafka_bootstrap_servers_plaintext   # SASL_PLAINTEXT, port 9093
 
-# Example output: 203.0.113.13:9092
+# Example output: <public-dns>:9092
 ```
 
 ##### Test External Connection
@@ -287,9 +294,10 @@ terraform output kafka_bootstrap_servers
 ```bash
 # Test connectivity
 nc -zv <public-ip> 9092
+nc -zv <public-ip> 9093
 
-# Test Kafka API from local machine (requires kafka tools)
-kafka-broker-api-versions --bootstrap-server <public-ip>:9092
+# Test Kafka API from local machine (requires kafka tools and a client.properties with the settings from Command-line Tools with SASL)
+kafka-broker-api-versions --bootstrap-server <public-ip>:9093 --command-config client.properties
 ```
 
 ##### Example: External Python Client (with SASL Authentication)
@@ -303,7 +311,7 @@ from kafka import KafkaProducer, KafkaConsumer
 
 # Producer
 producer = KafkaProducer(
-    bootstrap_servers=['<public-ip>:9092'],
+    bootstrap_servers=['<public-ip>:9093'],
     security_protocol='SASL_PLAINTEXT',
     sasl_mechanism='PLAIN',
     sasl_plain_username='admin',  # Your kafka_sasl_username
@@ -315,7 +323,7 @@ producer.flush()
 # Consumer
 consumer = KafkaConsumer(
     'sample-data-topic',
-    bootstrap_servers=['<public-ip>:9092'],
+    bootstrap_servers=['<public-ip>:9093'],
     security_protocol='SASL_PLAINTEXT',
     sasl_mechanism='PLAIN',
     sasl_plain_username='admin',  # Your kafka_sasl_username
@@ -331,7 +339,8 @@ for message in consumer:
 | Port | Listener | Access From | Use Case |
 |------|----------|-------------|----------|
 | 29092 | PLAINTEXT | Docker containers | Internal service communication |
-| **9092** | **SASL_PLAINTEXT** | **Anywhere (including SSH)** | **External clients with SASL auth** |
+| **9092** | **SASL_SSL** | **`allowed_cidr_blocks`** | **External clients with SASL auth over TLS** |
+| **9093** | **SASL_PLAINTEXT** | **`allowed_cidr_blocks`** | **External clients with SASL auth, no encryption** |
 
 #### SASL Authentication
 
@@ -347,11 +356,11 @@ terraform output kafka_sasl_username
 terraform output -raw kafka_sasl_password
 ```
 
-Default credentials:
-- **Username (API Key)**: `admin`
-- **Password (API Secret)**: `admin-secret`
+Credentials:
+- **Username (API Key)**: `kafka_sasl_username`, default `admin`
+- **Password (API Secret)**: `kafka_sasl_password`, required with no default; `terraform.tfvars.example` sets `admin-secret`
 
-⚠️ **Security Warning**: Change these default credentials in production! Edit `terraform.tfvars`:
+⚠️ **Security Warning**: Replace the example values from `terraform.tfvars.example` with your own. Edit `terraform.tfvars`:
 ```hcl
 kafka_sasl_username = "your-api-key"
 kafka_sasl_password = "your-secret-key"
@@ -360,30 +369,37 @@ kafka_sasl_password = "your-secret-key"
 ##### Command-line Tools with SASL
 
 ```bash
+# Create the client settings inside the broker container (use your kafka_sasl_username and kafka_sasl_password)
+docker exec broker bash -c 'cat > /tmp/client.properties << EOF
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+EOF'
+
 # List topics (from inside instance)
 docker exec broker kafka-topics --list \
-  --bootstrap-server localhost:9092 \
-  --command-config /opt/confluent/client.properties
+  --bootstrap-server localhost:9093 \
+  --command-config /tmp/client.properties
 
 # Consume messages (from inside instance)
 docker exec broker kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
+  --bootstrap-server localhost:9093 \
   --topic sample-data-topic \
   --from-beginning \
-  --consumer.config /opt/confluent/client.properties
+  --consumer.config /tmp/client.properties
 
 # Produce messages (from inside instance)
 docker exec -i broker kafka-console-producer \
-  --broker-list localhost:9092 \
+  --broker-list localhost:9093 \
   --topic sample-data-topic \
-  --producer.config /opt/confluent/client.properties
+  --producer.config /tmp/client.properties
 ```
 
 ##### Java Client Configuration
 
 ```java
 Properties props = new Properties();
-props.put("bootstrap.servers", "<public-ip>:9092");
+props.put("bootstrap.servers", "<public-ip>:9093");
 props.put("security.protocol", "SASL_PLAINTEXT");
 props.put("sasl.mechanism", "PLAIN");
 props.put("sasl.jaas.config",
@@ -399,7 +415,7 @@ KafkaProducer<String, String> producer = new KafkaProducer<>(props);
 const { Kafka } = require('kafkajs');
 
 const kafka = new Kafka({
-  brokers: ['<public-ip>:9092'],
+  brokers: ['<public-ip>:9093'],
   sasl: {
     mechanism: 'plain',
     username: 'admin',
@@ -504,10 +520,10 @@ sudo journalctl -u confluent-producer -f
 
 #### Kafka Connection Issues
 
-Verify the external listener is properly configured:
+Check that the external `SASL_PLAINTEXT` listener answers, with the client settings from Command-line Tools with SASL:
 
 ```bash
-docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092
+docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9093 --command-config /tmp/client.properties
 ```
 
 ### Cost Considerations
@@ -521,6 +537,8 @@ Estimated AWS costs (us-east-1 region):
 
 **Total estimated cost**: ~$190-200/month for 24/7 operation
 
+These are estimates from when the lab was written, not measured; check current AWS pricing for your region.
+
 #### Cost Optimization
 
 1. **Stop when not in use**: `terraform destroy` when done
@@ -533,8 +551,8 @@ Estimated AWS costs (us-east-1 region):
 #### For Production Use
 
 1. **Restrict CIDR blocks**: Limit `allowed_cidr_blocks` to your IP ranges
-2. **Enable encryption**: Add SSL/TLS for Kafka listeners
-3. **Enable authentication**: Configure SASL for Kafka
+2. **Encryption**: Use `SASL_SSL` on 9092 rather than `SASL_PLAINTEXT` on 9093; add TLS to the HTTP services
+3. **Authentication**: SASL/PLAIN covers the Kafka listeners only; add authentication to ZooKeeper and the HTTP services
 4. **Use private subnets**: Deploy in private subnet with bastion host
 5. **Enable CloudWatch**: Add monitoring and alerting
 6. **Backup data**: Configure EBS snapshots
@@ -545,8 +563,8 @@ Estimated AWS costs (us-east-1 region):
 ⚠️ **Warning**: Default configuration is for development/testing only
 
 - Every broker port open to whatever `allowed_cidr_blocks` is set to (`0.0.0.0/0` is rejected)
-- No authentication enabled
-- No encryption in transit
+- SASL/PLAIN on the external Kafka listeners 9092 and 9093; the internal `PLAINTEXT` listener 29092 (Docker network only), ZooKeeper and the HTTP services (8081, 8082, 8083, 8088, 9021) have no authentication
+- TLS only on 9092 (`SASL_SSL`, certificate signed by a CA generated on the instance); 9093, 29092, ZooKeeper and the HTTP services are unencrypted
 - Public IP with direct access
 
 ### Cleanup
@@ -605,7 +623,7 @@ carries no warranty. The providers and services it calls have their own terms.
 - **완전한 Confluent Platform**: 모든 핵심 구성 요소(Kafka, ZooKeeper, Schema Registry, Connect, ksqlDB, Control Center, REST Proxy)
 - **자동 설정**: Docker Compose로 명령 하나에 배포
 - **샘플 데이터 프로듀서**: Kafka 토픽에 샘플 데이터를 자동으로 생성
-- **프로덕션 준비 완료**: 인스턴스 유형, EBS 볼륨, 보안 그룹을 설정할 수 있음
+- **설정 가능**: 인스턴스 유형, EBS 볼륨, 보안 그룹이 허용할 CIDR 블록
 - **쉬운 관리**: 시작, 중지, 상태 확인용 스크립트
 
 ### 사전 준비
@@ -631,7 +649,8 @@ export AWS_REGION="us-east-1"  # 선택: 기본 리전 설정
 #### 1. 클론 후 디렉터리로 이동
 
 ```bash
-cd terraform-confluent-aws
+git clone https://github.com/litkhai/clickhouse-cloud-aws-hols.git
+cd clickhouse-cloud-aws-hols/labs/kafka/terraform-confluent-aws
 ```
 
 #### 2. 변수 설정
@@ -684,7 +703,7 @@ terraform output control_center_url
 
 1. **EC2 인스턴스**: Docker가 설치된 Ubuntu 22.04 LTS
 2. **ZooKeeper**: 클러스터 조정 (포트 2181)
-3. **Kafka 브로커**: 메시지 스트리밍 (포트 9092)
+3. **Kafka 브로커**: 메시지 스트리밍 (포트 9092, 9093)
 4. **Schema Registry**: 스키마 관리 (포트 8081)
 5. **Kafka Connect**: 데이터 통합 (포트 8083)
 6. **ksqlDB**: 스트림 처리 (포트 8088)
@@ -694,12 +713,13 @@ terraform output control_center_url
 
 #### 네트워크 구성
 
-배포는 다음 인그레스 규칙을 가진 보안 그룹을 만듭니다.
+배포는 다음 인그레스 규칙을 가진 보안 그룹을 만듭니다. 모든 규칙은 `allowed_cidr_blocks`에만 열려 있습니다.
 
 | 포트 | 서비스 | 설명 |
 |------|---------|-------------|
 | 2181 | ZooKeeper | 클러스터 조정 |
-| 9092 | Kafka | 브로커 접속 (내부 및 외부) |
+| 9092 | Kafka | `SASL_SSL` 브로커 접속 (외부) |
+| 9093 | Kafka | `SASL_PLAINTEXT` 브로커 접속 (외부) |
 | 8081 | Schema Registry | 스키마 관리 API |
 | 8083 | Kafka Connect | Connect API |
 | 8088 | ksqlDB | ksqlDB API |
@@ -709,16 +729,17 @@ terraform output control_center_url
 
 #### SASL 인증
 
-Kafka 브로커는 외부 클라이언트용으로 포트 **9092**에 **SASL/PLAIN 인증**이 설정됩니다.
+Kafka 브로커는 외부 클라이언트용으로 포트 **9092**(`SASL_SSL`)와 **9093**(`SASL_PLAINTEXT`)에 **SASL/PLAIN 인증**이 설정됩니다.
 
 **인증 세부 정보:**
-- **보안 프로토콜**: `SASL_PLAINTEXT`
+- **보안 프로토콜**: `SASL_SSL` (포트 9092, TLS) 또는 `SASL_PLAINTEXT` (포트 9093, 암호화 없음)
 - **SASL 메커니즘**: `PLAIN`
-- **기본 자격 증명**: `kafka_sasl_username`과 `kafka_sasl_password` 변수로 설정
+- **자격 증명**: `kafka_sasl_username`(기본값 `admin`)과 `kafka_sasl_password`(필수, 기본값 없음)
 
 **리스너 아키텍처:**
 - **내부 (PLAINTEXT)**: `broker:29092` - Control Center, Schema Registry, Connect가 사용 (인증 없음)
-- **외부 (SASL_PLAINTEXT)**: `<PUBLIC_IP>:9092` - 외부 클라이언트가 사용 (SASL 인증 필요)
+- **외부 (SASL_SSL)**: `<PUBLIC_DNS>:9092` - 외부 클라이언트가 사용 (SASL 인증 필요, TLS)
+- **외부 (SASL_PLAINTEXT)**: `<PUBLIC_DNS>:9093` - 외부 클라이언트가 사용 (SASL 인증 필요, 암호화 없음)
 
 이 아키텍처는 **Confluent Cloud의 인증 모델**을 그대로 따르므로 ClickHouse 연동 워크숍과 실습에 이상적입니다.
 
@@ -764,7 +785,7 @@ Python, Java, Go, Node.js, ClickHouse의 자세한 연결 예시는 [SASL_CONNEC
 | `sample_topic_name` | 샘플 토픽 이름 | "sample-data-topic" | 아니요 |
 | `data_producer_interval` | 데이터 생성 간격(초) | 5 | 아니요 |
 | `kafka_sasl_username` | Kafka SASL 사용자명 | "admin" | 아니요 |
-| `kafka_sasl_password` | Kafka SASL 비밀번호 | "admin-secret" | 아니요 |
+| `kafka_sasl_password` | Kafka SASL 비밀번호 (sensitive) | - | **예** |
 
 #### 인스턴스 유형 권장
 
@@ -808,16 +829,19 @@ sudo journalctl -u confluent-producer -f
 
 ##### Kafka 리스너 이해하기
 
-Kafka에는 **리스너 두 개**가 설정됩니다.
+Kafka에는 **리스너 세 개**가 설정됩니다.
 
-- **PLAINTEXT (포트 29092)**: 내부 Docker 네트워크 통신
-- **EXTERNAL (포트 9092)**: 외부 클라이언트 접속 (localhost를 포함해 어디서나)
+- **PLAINTEXT (포트 29092)**: 내부 Docker 네트워크 통신, 인증 없음 (호스트에 게시되지 않음)
+- **SASL_SSL (포트 9092)**: TLS 위의 SASL/PLAIN으로 외부 클라이언트 접속 (`allowed_cidr_blocks`에서)
+- **SASL_PLAINTEXT (포트 9093)**: SASL/PLAIN으로 외부 클라이언트 접속, 암호화 없음 (`allowed_cidr_blocks`에서)
+
+아래 명령은 브로커 컨테이너 안에서 실행되며, 클라이언트 설정이 필요 없는 내부 리스너 `localhost:29092`를 사용합니다.
 
 ##### 토픽 목록 보기 (SSH에서)
 
 ```bash
 # 인스턴스 안에서
-docker exec broker kafka-topics --list --bootstrap-server localhost:9092
+docker exec broker kafka-topics --list --bootstrap-server localhost:29092
 ```
 
 ##### 메시지 소비 (SSH에서)
@@ -825,7 +849,7 @@ docker exec broker kafka-topics --list --bootstrap-server localhost:9092
 ```bash
 # 인스턴스 안에서
 docker exec broker kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
+  --bootstrap-server localhost:29092 \
   --topic sample-data-topic \
   --from-beginning
 ```
@@ -835,19 +859,20 @@ docker exec broker kafka-console-consumer \
 ```bash
 # 인스턴스 안에서
 docker exec -i broker kafka-console-producer \
-  --broker-list localhost:9092 \
+  --broker-list localhost:29092 \
   --topic sample-data-topic
 ```
 
 #### 외부 애플리케이션에서 연결
 
-외부 클라이언트는 포트 **9092**로 연결합니다 (Confluent Cloud와 같음).
+외부 클라이언트는 포트 **9092**(`SASL_SSL`, Confluent Cloud와 같음) 또는 **9093**(`SASL_PLAINTEXT`)으로 연결합니다.
 
 ```bash
 # 외부 bootstrap 서버 가져오기
-terraform output kafka_bootstrap_servers
+terraform output kafka_bootstrap_servers             # SASL_SSL, 포트 9092
+terraform output kafka_bootstrap_servers_plaintext   # SASL_PLAINTEXT, 포트 9093
 
-# 출력 예시: 203.0.113.13:9092
+# 출력 예시: <public-dns>:9092
 ```
 
 ##### 외부 연결 테스트
@@ -855,9 +880,10 @@ terraform output kafka_bootstrap_servers
 ```bash
 # 연결 테스트
 nc -zv <public-ip> 9092
+nc -zv <public-ip> 9093
 
-# 로컬 머신에서 Kafka API 테스트 (kafka 도구 필요)
-kafka-broker-api-versions --bootstrap-server <public-ip>:9092
+# 로컬 머신에서 Kafka API 테스트 (kafka 도구와, SASL을 쓰는 명령줄 도구의 설정을 담은 client.properties 필요)
+kafka-broker-api-versions --bootstrap-server <public-ip>:9093 --command-config client.properties
 ```
 
 ##### 예시: 외부 Python 클라이언트 (SASL 인증 사용)
@@ -871,7 +897,7 @@ from kafka import KafkaProducer, KafkaConsumer
 
 # 프로듀서
 producer = KafkaProducer(
-    bootstrap_servers=['<public-ip>:9092'],
+    bootstrap_servers=['<public-ip>:9093'],
     security_protocol='SASL_PLAINTEXT',
     sasl_mechanism='PLAIN',
     sasl_plain_username='admin',  # 설정한 kafka_sasl_username
@@ -883,7 +909,7 @@ producer.flush()
 # 컨슈머
 consumer = KafkaConsumer(
     'sample-data-topic',
-    bootstrap_servers=['<public-ip>:9092'],
+    bootstrap_servers=['<public-ip>:9093'],
     security_protocol='SASL_PLAINTEXT',
     sasl_mechanism='PLAIN',
     sasl_plain_username='admin',  # 설정한 kafka_sasl_username
@@ -899,7 +925,8 @@ for message in consumer:
 | 포트 | 리스너 | 접속 위치 | 용도 |
 |------|----------|-------------|----------|
 | 29092 | PLAINTEXT | Docker 컨테이너 | 내부 서비스 통신 |
-| **9092** | **SASL_PLAINTEXT** | **어디서나 (SSH 포함)** | **SASL 인증을 쓰는 외부 클라이언트** |
+| **9092** | **SASL_SSL** | **`allowed_cidr_blocks`** | **TLS 위에서 SASL 인증을 쓰는 외부 클라이언트** |
+| **9093** | **SASL_PLAINTEXT** | **`allowed_cidr_blocks`** | **SASL 인증을 쓰는 외부 클라이언트, 암호화 없음** |
 
 #### SASL 인증
 
@@ -915,11 +942,11 @@ terraform output kafka_sasl_username
 terraform output -raw kafka_sasl_password
 ```
 
-기본 자격 증명:
-- **사용자명 (API Key)**: `admin`
-- **비밀번호 (API Secret)**: `admin-secret`
+자격 증명:
+- **사용자명 (API Key)**: `kafka_sasl_username`, 기본값 `admin`
+- **비밀번호 (API Secret)**: `kafka_sasl_password`, 필수이며 기본값 없음. `terraform.tfvars.example`에는 `admin-secret`이 들어 있음
 
-⚠️ **보안 경고**: 프로덕션에서는 이 기본 자격 증명을 바꾸세요! `terraform.tfvars`를 편집합니다.
+⚠️ **보안 경고**: `terraform.tfvars.example`의 예시 값을 직접 정한 값으로 바꾸세요. `terraform.tfvars`를 편집합니다.
 ```hcl
 kafka_sasl_username = "your-api-key"
 kafka_sasl_password = "your-secret-key"
@@ -928,30 +955,37 @@ kafka_sasl_password = "your-secret-key"
 ##### SASL을 쓰는 명령줄 도구
 
 ```bash
+# 브로커 컨테이너 안에 클라이언트 설정 만들기 (설정한 kafka_sasl_username과 kafka_sasl_password 사용)
+docker exec broker bash -c 'cat > /tmp/client.properties << EOF
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+EOF'
+
 # 토픽 목록 보기 (인스턴스 안에서)
 docker exec broker kafka-topics --list \
-  --bootstrap-server localhost:9092 \
-  --command-config /opt/confluent/client.properties
+  --bootstrap-server localhost:9093 \
+  --command-config /tmp/client.properties
 
 # 메시지 소비 (인스턴스 안에서)
 docker exec broker kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
+  --bootstrap-server localhost:9093 \
   --topic sample-data-topic \
   --from-beginning \
-  --consumer.config /opt/confluent/client.properties
+  --consumer.config /tmp/client.properties
 
 # 메시지 생산 (인스턴스 안에서)
 docker exec -i broker kafka-console-producer \
-  --broker-list localhost:9092 \
+  --broker-list localhost:9093 \
   --topic sample-data-topic \
-  --producer.config /opt/confluent/client.properties
+  --producer.config /tmp/client.properties
 ```
 
 ##### Java 클라이언트 구성
 
 ```java
 Properties props = new Properties();
-props.put("bootstrap.servers", "<public-ip>:9092");
+props.put("bootstrap.servers", "<public-ip>:9093");
 props.put("security.protocol", "SASL_PLAINTEXT");
 props.put("sasl.mechanism", "PLAIN");
 props.put("sasl.jaas.config",
@@ -967,7 +1001,7 @@ KafkaProducer<String, String> producer = new KafkaProducer<>(props);
 const { Kafka } = require('kafkajs');
 
 const kafka = new Kafka({
-  brokers: ['<public-ip>:9092'],
+  brokers: ['<public-ip>:9093'],
   sasl: {
     mechanism: 'plain',
     username: 'admin',
@@ -1072,10 +1106,10 @@ sudo journalctl -u confluent-producer -f
 
 #### Kafka 연결 문제
 
-외부 리스너가 제대로 설정되었는지 확인합니다.
+SASL을 쓰는 명령줄 도구의 클라이언트 설정으로 외부 `SASL_PLAINTEXT` 리스너가 응답하는지 확인합니다.
 
 ```bash
-docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092
+docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9093 --command-config /tmp/client.properties
 ```
 
 ### 비용 고려 사항
@@ -1089,6 +1123,8 @@ docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092
 
 **총 예상 비용**: 24/7 운영 시 약 $190-200/월
 
+실습을 작성할 때의 추정치이며 측정한 값이 아닙니다. 사용하는 리전의 현재 AWS 요금을 확인하세요.
+
 #### 비용 최적화
 
 1. **사용하지 않을 때는 중지**: 끝나면 `terraform destroy`
@@ -1101,8 +1137,8 @@ docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092
 #### 프로덕션 사용 시
 
 1. **CIDR 블록 제한**: `allowed_cidr_blocks`를 내 IP 범위로 제한
-2. **암호화 활성화**: Kafka 리스너에 SSL/TLS 추가
-3. **인증 활성화**: Kafka에 SASL 설정
+2. **암호화**: 9093의 `SASL_PLAINTEXT` 대신 9092의 `SASL_SSL` 사용. HTTP 서비스에 TLS 추가
+3. **인증**: SASL/PLAIN은 Kafka 리스너에만 적용됨. ZooKeeper와 HTTP 서비스에 인증 추가
 4. **프라이빗 서브넷 사용**: bastion 호스트를 두고 프라이빗 서브넷에 배포
 5. **CloudWatch 활성화**: 모니터링과 알림 추가
 6. **데이터 백업**: EBS 스냅샷 설정
@@ -1113,8 +1149,8 @@ docker exec broker kafka-broker-api-versions --bootstrap-server localhost:9092
 ⚠️ **경고**: 기본 구성은 개발/테스트 전용입니다
 
 - 모든 브로커 포트가 `allowed_cidr_blocks`에 설정한 범위에 열려 있음 (`0.0.0.0/0`은 거부됨)
-- 활성화된 인증 없음
-- 전송 구간 암호화 없음
+- 외부 Kafka 리스너 9092와 9093에는 SASL/PLAIN이 있음. 내부 `PLAINTEXT` 리스너 29092 (Docker 네트워크 전용), ZooKeeper, HTTP 서비스(8081, 8082, 8083, 8088, 9021)에는 인증 없음
+- TLS는 9092(`SASL_SSL`, 인스턴스에서 만든 CA가 서명한 인증서)에만 있음. 9093, 29092, ZooKeeper, HTTP 서비스는 암호화되지 않음
 - 직접 접근할 수 있는 퍼블릭 IP
 
 ### 정리

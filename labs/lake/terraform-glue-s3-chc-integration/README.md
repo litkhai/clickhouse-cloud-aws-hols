@@ -248,7 +248,7 @@ This will:
 
 ### Key Features
 
-- ✅ **Database-level integration**: Mount entire Glue database in ClickHouse
+- ✅ **Catalog-level integration**: the region's Glue catalog is mounted as one ClickHouse database; choosing a single Glue database (`glue_database`) is not supported in 25.8 (see *Current Limitations*)
 - ✅ **Automatic table discovery**: All Glue tables immediately available
 - ✅ **Schema synchronization**: Changes reflected automatically
 - ✅ **Partition pruning**: Efficient queries on partitioned data
@@ -502,7 +502,7 @@ IAM 작업에서 권한 거부(permission denied) 오류가 보인다면:
 
 ### 주요 기능
 
-- ✅ **데이터베이스 수준 통합**: Glue 데이터베이스 전체를 ClickHouse에 마운트
+- ✅ **카탈로그 수준 통합**: 리전의 Glue 카탈로그를 ClickHouse 데이터베이스 하나로 마운트. Glue 데이터베이스 하나만 고르는 `glue_database`는 25.8에서 지원하지 않음 (*현재 제약 사항* 참고)
 - ✅ **테이블 자동 탐색**: 모든 Glue 테이블을 바로 사용 가능
 - ✅ **스키마 동기화**: 변경 사항이 자동으로 반영됨
 - ✅ **파티션 프루닝**: 파티션된 데이터에 대한 효율적인 쿼리
