@@ -11,6 +11,8 @@
 > - `user-data.sh` prints the SASL password to the instance's cloud-init log.
 > - Not pinned: the AMI (newest Canonical Ubuntu 22.04 at `apply` time). Confluent images are pinned by `confluent_version` (default `7.5.0`).
 > - Run path: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start* and *Cleanup*; `deploy.sh`, `deploy-complete.sh` and `destroy.sh` also exist). `deploy-with-cert.sh` leaves `NLB_DNS_PLACEHOLDER` in the advertised listener; only `deploy-complete.sh`, `update-advertised-listener.sh` and `manual-update-advertised-listener.sh` replace it, each followed by `docker-compose restart broker`.
+> - Potential issue ([#22](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/22)): the three scripts apply the new advertised listener with `docker-compose restart broker`, but Docker's `compose restart` reference says changes to the compose file, environment variables included, are not picked up by a restart (docs.docker.com, read 2026-10-06). `docker-compose up -d broker` recreates the container; not tried here.
+> - Potential issue, hypothesis (#22): port 9092 accepts only `allowed_cidr_blocks` (`main.tf`), so NLB health checks and forwarded traffic from other addresses may be dropped; and the NLB has no security group, so 9094 may be reachable from outside `allowed_cidr_blocks`.
 > - A re-run should show: a SASL_SSL client inside `allowed_cidr_blocks` produces and consumes through the NLB on port 9094, and the same client from an address outside it cannot connect.
 >
 > **마지막 검증: 2025-11-20** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
@@ -24,6 +26,8 @@
 > - `user-data.sh`가 SASL 비밀번호를 인스턴스의 cloud-init 로그에 출력함.
 > - 고정 안 된 것: AMI (`apply` 시점의 최신 Canonical Ubuntu 22.04). Confluent 이미지는 `confluent_version`(기본 `7.5.0`)으로 고정.
 > - 실행 경로: `./deploy-with-cert.sh` → `terraform destroy` (README *Quick Start*·*Cleanup*. `deploy.sh`, `deploy-complete.sh`, `destroy.sh`도 있음). `deploy-with-cert.sh`는 advertised listener의 `NLB_DNS_PLACEHOLDER`를 그대로 둠. 이 값을 바꾸는 것은 `deploy-complete.sh`, `update-advertised-listener.sh`, `manual-update-advertised-listener.sh`뿐이고, 셋 다 바꾼 뒤 `docker-compose restart broker`를 실행함.
+> - 잠재 문제 ([#22](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/22)): 세 스크립트 모두 새 advertised listener를 `docker-compose restart broker`로 적용하는데, Docker의 `compose restart` 레퍼런스는 환경 변수를 포함한 compose 파일 변경이 restart로는 반영되지 않는다고 함 (docs.docker.com, 2026-10-06 확인). `docker-compose up -d broker`는 컨테이너를 다시 만듦. 여기서는 시도하지 않음.
+> - 잠재 문제, 가설 (#22): 9092 포트는 `allowed_cidr_blocks`만 받으므로(`main.tf`) 다른 주소에서 오는 NLB 헬스 체크·전달 트래픽이 막힐 수 있음. 또 NLB에 보안 그룹이 없어 9094가 `allowed_cidr_blocks` 밖에서도 열려 있을 수 있음.
 > - 재실행에서 보여야 할 것: `allowed_cidr_blocks` 안의 SASL_SSL 클라이언트가 NLB 9094 포트로 produce·consume 하고, 범위 밖 주소의 같은 클라이언트는 연결되지 않음.
 
 [English](#english) | [한국어](#한국어)

@@ -9,6 +9,7 @@
 > - Missing on ClickHouse Cloud: per the limitation below, ClickHouse's own role (in ClickHouse's account) would also need a permission for your bucket, which you cannot add; the 403 was not traced further. Use [terraform-chc-secures3-aws](../terraform-chc-secures3-aws/) there.
 > - Missing for an OSS or same-account check: a ClickHouse server running under an IAM role in your account, with that role's ARN in `clickhouse_iam_role_arns`. The lab creates only the bucket and its settings, the bucket policy and optional sample folders.
 > - AWS provider: `~> 5.0` resolves to 5.100.0, the last 5.x release; never run on 6.x (6.67.0 is the newest, Terraform Registry API read 2026-10-04).
+> - Potential issue ([#21](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/21)): the scripts come from the AssumeRole lab. `test-s3-integration.sh` reads `terraform output -raw iam_role_arn`, which this lab does not define (`outputs.tf` has `clickhouse_iam_role_arns`), and exits when it is empty; `deploy.sh` and `destroy.sh` read it too and fall back to `N/A` / empty. Their texts mention an IAM role and policy and `extra_credentials()` SQL that this lab does not use.
 > - A re-run should show: a `SELECT` from the bucket succeeds under a role listed in `clickhouse_iam_role_arns` and returns 403 under a role that is not.
 >
 > AWS and ClickHouse Cloud behaviour may have drifted since.
@@ -22,6 +23,7 @@
 > - ClickHouse Cloud에서 빠진 것: 아래 제약 설명대로라면 ClickHouse 계정에 있는 ClickHouse 쪽 IAM 역할에도 이 버킷 권한이 있어야 하는데, 사용자는 그것을 추가할 수 없음. 403의 원인을 더 추적하지는 않았음. ClickHouse Cloud에서는 [terraform-chc-secures3-aws](../terraform-chc-secures3-aws/)를 쓸 것.
 > - OSS·같은 계정 확인에 빠진 것: 내 계정의 IAM 역할로 실행되는 ClickHouse 서버와, 그 역할 ARN을 넣은 `clickhouse_iam_role_arns`. 이 실습은 버킷과 그 설정, 버킷 정책, 선택적 샘플 폴더만 만듦.
 > - AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
+> - 잠재 문제 ([#21](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/21)): 스크립트가 AssumeRole 실습에서 온 것임. `test-s3-integration.sh`는 이 실습에 없는 출력값 `iam_role_arn`을 `terraform output -raw iam_role_arn`으로 읽고(`outputs.tf`에는 `clickhouse_iam_role_arns`만 있음), 값이 비면 종료함. `deploy.sh`, `destroy.sh`도 같은 값을 읽고 `N/A`·빈 값으로 넘어감. 스크립트 문구의 IAM 역할·정책, `extra_credentials()` SQL은 이 실습에서 쓰지 않음.
 > - 재실행에서 보여야 할 것: `clickhouse_iam_role_arns`에 있는 역할로는 버킷 `SELECT`가 성공하고, 없는 역할로는 403이 남.
 >
 > 그동안 AWS·ClickHouse Cloud 동작이 달라졌을 수 있습니다.
