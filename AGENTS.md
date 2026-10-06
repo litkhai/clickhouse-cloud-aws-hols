@@ -10,6 +10,9 @@ bilingual READMEs (English first, `## English` / `## 한국어`), no links to la
 that do not exist yet, and the **Verification claims** rule: only write
 *"Verified on …"* when the scripts actually ran end to end against that version.
 
+Paths were renamed by `git filter-repo`, so `git log --follow` works across the split:
+`chc/kafka/`, `chc/lake/` and `chc/s3/` are now `labs/kafka/`, `labs/lake/` and `labs/s3/`.
+
 Differences from the core repository:
 
 - No Pages site and no `site` CI job (decision D7). The root README tables are
@@ -17,7 +20,6 @@ Differences from the core repository:
 - `docs/labs.json` is the notes-site export: the labs whose `lab.yaml` sets `web: true`
   (`tools/lab.schema.md`), written by `tools/labs_json.py` and checked locally with `--check`
   (README, Repository checks). Never set `web` without the owner's choice for that lab.
-- Enable the guard once per clone: `git config core.hooksPath .githooks`.
 
 ## Rules for this repository
 
@@ -33,17 +35,6 @@ Differences from the core repository:
 - Never commit Terraform state or saved plans. The `hygiene` job checks file *content*, because
   a `tfplan` is a zip with the full state inside and slips past name-based ignore rules.
 - `allowed_cidr_blocks` is required and rejects `0.0.0.0/0`. Keep it that way.
-
-## Where things came from
-
-Paths were renamed by `git filter-repo`, so `git log --follow` works across the
-split. The original locations:
-
-| In clickhouse-hols | Here |
-|---|---|
-| `chc/kafka/` | `labs/kafka/` |
-| `chc/lake/` | `labs/lake/` |
-| `chc/s3/` | `labs/s3/` |
 
 <!-- harness:core start — khai-harness core@49e8c24 · context public · 손으로 고치지 마세요 -->
 **Context: public.** Public sources only — nothing from company connectors, internal hosts, internal wikis or
