@@ -1,5 +1,16 @@
 {
   "repo": "clickhouse-cloud-aws-hols",
-  "generated": "2026-10-02T15:21:13Z",
-  "labs": []
+  "generated": "2026-10-06T08:06:45Z",
+  "labs": [
+    {
+      "path": "labs/s3/terraform-chc-secures3-aws",
+      "title_ko": "Terraform으로 구성하는 ClickHouse Cloud Secure S3 연동",
+      "summary_ko": "IAM 역할 기반 인증으로 키 없이 ClickHouse Cloud가 S3를 읽고 쓰도록 Terraform으로 구성하는 실습입니다.",
+      "title_en": "ClickHouse Cloud Secure S3 Integration with Terraform",
+      "summary_en": "Set up keyless, IAM role-based S3 read and write access for ClickHouse Cloud with Terraform, using the S3 table engine.",
+      "category": "cloud",
+      "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/s3/terraform-chc-secures3-aws/README.md#한국어",
+      "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/s3/terraform-chc-secures3-aws/README.md#english"
+    }
+  ]
 }
