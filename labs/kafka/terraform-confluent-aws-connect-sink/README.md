@@ -4,11 +4,12 @@
 > Changed since without a full re-run:
 > - 2026-07-28 — the Kafka SASL password moved from a hard-coded default to a required variable; the username still defaults to `admin` (not run)
 > - 2026-08-10 — `allowed_cidr_blocks` is required and rejects `0.0.0.0/0` (checked with `terraform plan` on 1.15.8, not applied)
+> - 2026-10-06 — `user-data.sh` no longer prints the SASL password to the cloud-init log ([#30](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/30); not run)
 >
 > Not checked — adjust before `apply` (recorded 2026-10-04 from reading the code; nothing was run):
 > - AWS provider: `~> 5.0` resolves to 5.100.0, the last 5.x release; never run on 6.x (6.67.0 is the newest, Terraform Registry API read 2026-10-04).
 > - SASL: `user-data.sh` puts the username and password unescaped into the JAAS config and `docker-compose.yml`; every run so far used `admin` / `admin-secret`. Use letters and digits only — `"` breaks the quoting and `$` is expanded by the shell.
-> - `user-data.sh` prints the SASL password to the instance's cloud-init log.
+> - The SASL password is still in the instance's user data (`main.tf` passes it to `templatefile`).
 > - Not pinned: the AMI (newest Canonical Ubuntu 22.04 at `apply` time), `clickhouse/clickhouse-kafka-connect:latest` and `confluent-hub-client-latest` (both in `user-data.sh`). Confluent images are pinned by `confluent_version` (default `7.5.0`).
 > - Run path: there is no `deploy.sh` / `destroy.sh` — `terraform apply` → `terraform destroy`.
 > - A re-run should show: rows from the sample producer arrive in the ClickHouse Cloud table, and a SASL client from an address outside `allowed_cidr_blocks` cannot connect.
@@ -17,11 +18,12 @@
 > 그 뒤 전체 재실행 없이 바뀐 것:
 > - 2026-07-28 — Kafka SASL 비밀번호가 하드코딩 기본값에서 필수 변수로 바뀜. 사용자명은 여전히 기본값 `admin` (실행 안 함)
 > - 2026-08-10 — `allowed_cidr_blocks` 필수화, `0.0.0.0/0` 거부 (terraform 1.15.8에서 `plan`까지만 확인, apply 안 함)
+> - 2026-10-06 — `user-data.sh`가 SASL 비밀번호를 cloud-init 로그에 더 이상 출력하지 않음 ([#30](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/30), 실행 안 함)
 >
 > 확인 안 된 것 — `apply` 전에 맞출 것 (2026-10-04 코드를 읽고 기록, 실행 안 함):
 > - AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
 > - SASL: `user-data.sh`가 사용자명·비밀번호를 이스케이프 없이 JAAS 설정과 `docker-compose.yml`에 넣음. 지금까지 실행은 모두 `admin` / `admin-secret`. 영문자와 숫자만 쓸 것 — `"`는 따옴표를 깨고 `$`는 셸이 치환함.
-> - `user-data.sh`가 SASL 비밀번호를 인스턴스의 cloud-init 로그에 출력함.
+> - SASL 비밀번호는 여전히 인스턴스 user data에 들어 있음 (`main.tf`가 `templatefile`에 넘김).
 > - 고정 안 된 것: AMI (`apply` 시점의 최신 Canonical Ubuntu 22.04), `clickhouse/clickhouse-kafka-connect:latest`, `confluent-hub-client-latest` (둘 다 `user-data.sh`). Confluent 이미지는 `confluent_version`(기본 `7.5.0`)으로 고정.
 > - 실행 경로: `deploy.sh` / `destroy.sh`가 없음 — `terraform apply` → `terraform destroy`.
 > - 재실행에서 보여야 할 것: 샘플 producer의 행이 ClickHouse Cloud 테이블에 들어오고, `allowed_cidr_blocks` 밖 주소의 SASL 클라이언트는 연결되지 않음.
