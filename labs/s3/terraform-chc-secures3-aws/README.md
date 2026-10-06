@@ -598,6 +598,87 @@ For issues or questions:
 It is still educational material: it provisions real cloud resources that cost money, and
 carries no warranty. The providers and services it calls have their own terms.
 
+### From the notes site (migrated, not verified)
+
+> Moved on 2026-10-06 from the author's notes site; not re-run here. English is an LLM-assisted translation.
+
+The official ClickHouse documentation page "Accessing S3 data securely" only covers secure *access*. For the *write* operations this lab uses, the role also needs `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload`. Besides Terraform, the notes site describes two other ways to create the IAM role.
+
+#### Create the IAM role with CloudFormation
+
+Use the template from the official ClickHouse documentation to create the resources automatically:
+
+[CloudFormation quick-create](https://us-west-2.console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/quickcreate?templateURL=https://s3.us-east-2.amazonaws.com/clickhouse-public-resources.clickhouse.cloud/cf-templates/secure-s3.yaml&stackName=ClickHouseSecureS3)
+
+| Parameter | Description |
+| --- | --- |
+| RoleName | Name of the IAM role to create (for example ClickHouseAccessRole-001) |
+| ClickHouse Instance Roles | ClickHouse service IAM role ARN (comma-separated) |
+| Bucket Names | S3 bucket names to allow (names only, not ARNs) |
+| Bucket Access | Read or Read/Write |
+| Role Session Name | Session name for extra security (optional) |
+
+#### Create the IAM role by hand in the AWS Console (without Terraform)
+
+**1. Create the IAM role.** Go to AWS Console → IAM → Roles → Create role, choose "Custom trust policy" and enter the trust policy below. Replace `Principal.AWS` with the Service role ID (IAM) copied from the ClickHouse Cloud Console.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowClickHouseAssumeRole",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/CH-S3-your-service-Role"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+**2. Create the permission policy.** On the role's Permissions tab choose "Add permissions" → "Create inline policy", open the JSON tab and enter the policy below. Replace `YOUR_BUCKET_NAME` with the real bucket name; for several buckets, make `Resource` an array or add statements.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BucketLevelPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME"
+    },
+    {
+      "Sid": "ObjectLevelReadPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME/*"
+    },
+    {
+      "Sid": "ObjectLevelWritePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME/*"
+    }
+  ]
+}
+```
+
+**3. Copy the role ARN** (for example `arn:aws:iam::111111111111:role/ClickHouseAccessRole`) and use it as `extra_credentials` in the ClickHouse query.
+
 ---
 
 ## 한국어
@@ -1185,3 +1266,94 @@ terraform output setup_checklist         # 단계별 설정 가이드
 저장소의 나머지 부분과 같이 [MIT](../../../LICENSE)입니다 — 예전 문구는 아무 권리도 부여하지 않았습니다.
 여전히 교육용 자료입니다. 비용이 드는 실제 클라우드 리소스를 프로비저닝하며, 어떤 보증도
 제공하지 않습니다. 이 자료가 호출하는 provider와 서비스에는 각자의 약관이 있습니다.
+
+### 노트 사이트에서 옮긴 내용 (이관본, 미검증)
+
+> 2026-10-06 작성자의 노트 사이트에서 옮겼습니다. 여기서 다시 실행하지 않았습니다. 영어본은 LLM 도움으로 번역한 것입니다.
+
+ClickHouse 공식 문서 "Accessing S3 data securely"는 S3에 안전하게 "접근"하는 방법만 다룹니다. 이 실습처럼 "쓰기" 작업을 하려면 `s3:PutObject`, `s3:DeleteObject`, `s3:AbortMultipartUpload`가 추가로 필요합니다. 노트 사이트에는 Terraform 외에 IAM Role을 만드는 방법이 두 가지 더 있습니다.
+
+#### CloudFormation으로 IAM Role 생성
+
+ClickHouse 공식 문서에서 제공하는 템플릿으로 필요한 리소스를 자동 생성합니다.
+
+[CloudFormation 빠른 생성](https://us-west-2.console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/quickcreate?templateURL=https://s3.us-east-2.amazonaws.com/clickhouse-public-resources.clickhouse.cloud/cf-templates/secure-s3.yaml&stackName=ClickHouseSecureS3)
+
+| 파라미터 | 설명 |
+| --- | --- |
+| RoleName | 생성할 IAM Role 이름 (예: ClickHouseAccessRole-001) |
+| ClickHouse Instance Roles | ClickHouse 서비스 IAM Role ARN (쉼표로 구분) |
+| Bucket Names | 접근을 허용할 S3 버킷 이름 (ARN이 아닌 이름만) |
+| Bucket Access | Read 또는 Read/Write |
+| Role Session Name | 추가 보안을 위한 세션 이름 (선택) |
+
+#### AWS Console에서 직접 IAM Role 생성 (Terraform 없이)
+
+**1. IAM Role 생성**
+
+AWS Console → IAM → Roles → Create role로 이동합니다. "Custom trust policy"를 선택하고 아래 Trust Policy를 입력합니다.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowClickHouseAssumeRole",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:role/CH-S3-your-service-Role"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+`Principal.AWS` 값을 ClickHouse Cloud Console에서 복사한 Service role ID (IAM)로 교체합니다.
+
+**2. Permission Policy 생성**
+
+Role 생성 후 Permissions 탭에서 "Add permissions" → "Create inline policy"를 선택하고 JSON 탭에서 아래 내용을 입력합니다.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BucketLevelPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME"
+    },
+    {
+      "Sid": "ObjectLevelReadPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME/*"
+    },
+    {
+      "Sid": "ObjectLevelWritePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME/*"
+    }
+  ]
+}
+```
+
+`YOUR_BUCKET_NAME`을 실제 S3 버킷 이름으로 교체합니다. 여러 버킷에 접근해야 하면 Resource를 배열로 지정하거나 Statement를 추가합니다.
+
+**3. Role ARN 복사**
+
+생성된 Role의 ARN (예: `arn:aws:iam::111111111111:role/ClickHouseAccessRole`)을 복사해서 ClickHouse 쿼리의 `extra_credentials`에서 사용합니다.
