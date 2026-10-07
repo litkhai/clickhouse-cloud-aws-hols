@@ -5,10 +5,22 @@
 > AWS provider: `~> 5.0` resolves to 5.100.0, the last 5.x release; never run on 6.x (6.67.0 is the newest, Terraform Registry API read 2026-10-04).
 > Provider and AWS/ClickHouse Cloud behaviour may have drifted since; expect to adjust before `apply`.
 >
+> Not checked — ClickHouse 26.x (recorded 2026-10-07 from the ClickHouse docs and source; nothing was run). *Current Limitations* below is as of ClickHouse Cloud 25.8; Cloud services now run 26.x (one measured 26.6.1.2191 on 2026-10-02 in [labs/billing/usage-cost](../../billing/usage-cost/)).
+> - IAM role: the [AWS Glue catalog docs page](https://clickhouse.com/docs/use-cases/data-lake/glue-catalog) (source last changed 2026-05-31) lists `aws_role_arn` from v26.2, with an optional `aws_role_session_name`. In the ClickHouse source (`src/Databases/DataLake/DatabaseDataLakeSettings.cpp`) `aws_role_arn` is absent in `v26.1.1.912-stable` and present from `v26.2.1.1139-stable`; `v26.6.1.1193-stable` also has `aws_external_id`. The lab still puts access keys into its SQL; role auth was not tried here, and the page does not say which principal the role's trust policy must allow on ClickHouse Cloud.
+> - `glue_database`: still no such setting in `v26.6.1.1193-stable`. The docs page says ClickHouse supports one namespace: the region's whole catalog is one database and tables are named `` `database.table` ``. The examples here query `` glue_db.`sales_orders` `` without the Glue database name — not checked.
+> - Potential issue: `deploy.sh` prints `glue_database = '…'` as an active setting, while this README and `outputs.tf` comment it out. With no such setting in `v25.8.1.5101-lts` or `v26.6.1.1193-stable`, the SQL copied from `deploy.sh` may be rejected — not run.
+> - The docs page marks the integration Beta and says to run `SET allow_database_glue_catalog = 1;`. The SQL that `deploy.sh` and `outputs.tf` print does not set it.
+>
 > **마지막 검증: 2025-11-17** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
 > 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
 > AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
 > 그동안 provider와 AWS·ClickHouse Cloud 동작이 달라졌을 수 있으니 `apply` 전에 조정이 필요할 수 있습니다.
+>
+> 확인 안 된 것 — ClickHouse 26.x (2026-10-07 ClickHouse 문서와 소스를 읽고 기록, 실행 안 함). 아래 *현재 제약 사항*은 ClickHouse Cloud 25.8 기준입니다. 지금 Cloud 서비스는 26.x입니다 (2026-10-02 [labs/billing/usage-cost](../../billing/usage-cost/)에서 서비스 하나를 26.6.1.2191로 측정).
+> - IAM 역할: [AWS Glue catalog 문서](https://clickhouse.com/docs/use-cases/data-lake/glue-catalog)(소스 마지막 변경 2026-05-31)는 v26.2부터 `aws_role_arn`을, 선택 항목으로 `aws_role_session_name`을 적고 있습니다. ClickHouse 소스(`src/Databases/DataLake/DatabaseDataLakeSettings.cpp`)에서 `aws_role_arn`은 `v26.1.1.912-stable`에는 없고 `v26.2.1.1139-stable`부터 있으며, `v26.6.1.1193-stable`에는 `aws_external_id`도 있습니다. 이 실습은 여전히 SQL에 액세스 키를 넣습니다. 역할 인증은 여기서 시도하지 않았고, ClickHouse Cloud에서 역할의 신뢰 정책이 어떤 주체를 허용해야 하는지는 문서에 없습니다.
+> - `glue_database`: `v26.6.1.1193-stable`에도 이런 설정은 없습니다. 문서에 따르면 ClickHouse는 네임스페이스를 하나만 지원해서, 리전의 카탈로그 전체가 데이터베이스 하나가 되고 테이블 이름은 `` `database.table` `` 형태입니다. 이 실습의 예시는 Glue 데이터베이스 이름 없이 `` glue_db.`sales_orders` ``를 조회합니다 — 확인 안 함.
+> - 잠재 문제: `deploy.sh`는 `glue_database = '…'`를 활성 설정으로 출력하지만, 이 README와 `outputs.tf`는 주석 처리합니다. `v25.8.1.5101-lts`와 `v26.6.1.1193-stable` 모두 이런 설정이 없으므로 `deploy.sh`에서 복사한 SQL은 거부될 수 있습니다 — 실행 안 함.
+> - 문서는 이 연동을 Beta로 표시하고 `SET allow_database_glue_catalog = 1;`을 실행하라고 합니다. `deploy.sh`와 `outputs.tf`가 출력하는 SQL에는 이 설정이 없습니다.
 
 [English](#english) | [한국어](#한국어)
 
@@ -17,6 +29,8 @@
 Simple Terraform setup to integrate ClickHouse Cloud with AWS Glue Catalog using Apache Iceberg tables.
 
 ### ⚠️ Current Limitations (ClickHouse Cloud 25.8)
+
+As of 25.8, when the lab last ran. The docs list IAM role authentication from v26.2 — see the banner.
 
 **Known limitations in ClickHouse Cloud version 25.8:**
 - ❌ `glue_database` parameter not supported in DataLakeCatalog
@@ -271,6 +285,8 @@ This will:
 Apache Iceberg 테이블을 사용해 ClickHouse Cloud를 AWS Glue Catalog와 통합하는 간단한 Terraform 구성입니다.
 
 ### ⚠️ 현재 제약 사항 (ClickHouse Cloud 25.8)
+
+실습을 마지막으로 실행한 25.8 기준입니다. 문서에는 v26.2부터 IAM 역할 인증이 있습니다 — 맨 위 배너 참고.
 
 **ClickHouse Cloud 25.8 버전의 알려진 제약 사항:**
 - ❌ DataLakeCatalog에서 `glue_database` 파라미터를 지원하지 않습니다
