@@ -1,0 +1,7 @@
+# Publishing keys (tools/lab.schema.md) — published 2026-10-07
+web: true
+title_ko: "Usage Cost API로 보는 ClickHouse Cloud 청구 항목과 세부 분해"
+summary_ko: "Usage Cost API로 service·datawarehouse·clickpipe 세 항목이 무엇을 청구하는지 확인하고, 시스템 테이블로 데이터베이스·사용자별 배분을 추정하는 실습입니다. 아무것도 만들지 않습니다."
+title_en: "Usage Cost API — what ClickHouse Cloud bills, and how far it breaks down"
+summary_en: "Read the Usage Cost API to see what the service, datawarehouse and clickpipe items bill, and estimate a per-database and per-user allocation from system tables. Creates nothing."
+category: cloud
