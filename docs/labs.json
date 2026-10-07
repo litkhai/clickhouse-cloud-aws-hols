@@ -1,6 +1,6 @@
 {
   "repo": "clickhouse-cloud-aws-hols",
-  "generated": "2026-10-07T01:07:35Z",
+  "generated": "2026-10-07T08:58:51Z",
   "labs": [
     {
       "path": "labs/billing/usage-cost",
@@ -9,6 +9,7 @@
       "title_en": "Usage Cost API — what ClickHouse Cloud bills, and how far it breaks down",
       "summary_en": "Read the Usage Cost API to see what the service, datawarehouse and clickpipe items bill, and estimate a per-database and per-user allocation from system tables. Creates nothing.",
       "category": "cloud",
+      "verified_on": "26.6.1.2191",
       "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/billing/usage-cost/README.md#한국어",
       "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/billing/usage-cost/README.md#english"
     },
