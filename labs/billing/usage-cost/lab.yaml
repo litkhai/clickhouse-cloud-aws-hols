@@ -5,3 +5,6 @@ summary_ko: "Usage Cost API로 service·datawarehouse·clickpipe 세 항목이 �
 title_en: "Usage Cost API — what ClickHouse Cloud bills, and how far it breaks down"
 summary_en: "Read the Usage Cost API to see what the service, datawarehouse and clickpipe items bill, and estimate a per-database and per-user allocation from system tables. Creates nothing."
 category: cloud
+# Runner key (tools/lab.schema.md): the build 02-load.sql and 03-allocate.sql last ran against end to end,
+# 2026-10-02 (README banner). hol does not run this lab, so there is no clickhouse key.
+verified_on: 26.6.1.2191
