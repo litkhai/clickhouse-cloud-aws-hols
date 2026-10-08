@@ -1,0 +1,8 @@
+# Publishing keys (tools/lab.schema.md) — published 2026-10-08
+web: true
+title_ko: "Terraform으로 구성하는 AWS Glue 카탈로그와 ClickHouse Cloud 연동"
+summary_ko: "S3에 Iceberg 테이블을 만들어 Glue 크롤러로 등록한 뒤, ClickHouse Cloud에서 Glue 카탈로그를 DataLakeCatalog 데이터베이스로 붙여 조회하는 Terraform 실습입니다."
+title_en: "ClickHouse Cloud and the AWS Glue Catalog with Terraform"
+summary_en: "Create Iceberg tables on S3, register them with a Glue crawler, and mount the Glue catalog in ClickHouse Cloud as a DataLakeCatalog database, all set up with Terraform."
+category: feature
+tags: [data-lake]

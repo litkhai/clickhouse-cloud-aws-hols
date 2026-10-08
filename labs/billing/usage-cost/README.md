@@ -10,6 +10,8 @@
 
 ## English
 
+> **Related notes** (Korean): [ClickHouse Cloud API 기반 메트릭 가이드](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-cloud-api/)
+
 This lab answers two recurring billing questions with the Usage Cost API, and shows where its detail ends:
 
 1. Three cost categories can be tracked: `service`, `clickpipe` and `datawarehouse`. Is the S3 cost of stored data the `datawarehouse` item?
@@ -182,6 +184,8 @@ Pricing and currency conversion · per-query billing (it does not exist) · chan
 ---
 
 ## 한국어
+
+> **관련 글**: [ClickHouse Cloud API 기반 메트릭 가이드](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-cloud-api/)
 
 이 실습은 자주 나오는 빌링 질문 두 가지에 Usage Cost API로 답하고, 그 API로 어디까지 쪼갤 수 있는지 보여 줍니다.
 

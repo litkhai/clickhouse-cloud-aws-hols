@@ -1,6 +1,6 @@
 {
   "repo": "clickhouse-cloud-aws-hols",
-  "generated": "2026-10-07T08:58:51Z",
+  "generated": "2026-10-08T13:07:38Z",
   "labs": [
     {
       "path": "labs/billing/usage-cost",
@@ -10,8 +10,38 @@
       "summary_en": "Read the Usage Cost API to see what the service, datawarehouse and clickpipe items bill, and estimate a per-database and per-user allocation from system tables. Creates nothing.",
       "category": "cloud",
       "verified_on": "26.6.1.2191",
+      "tags": [
+        "cloud-operations"
+      ],
       "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/billing/usage-cost/README.md#한국어",
       "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/billing/usage-cost/README.md#english"
+    },
+    {
+      "path": "labs/kafka/terraform-confluent-aws-nlb-ssl",
+      "title_ko": "NLB에서 TLS를 종료하는 AWS 위 Confluent Kafka (Terraform)",
+      "summary_ko": "Terraform으로 AWS에 Confluent Kafka를 띄워 NLB에서 SSL을 종료하고, Kafka가 NLB 주소를 advertise해 클라이언트가 NLB를 계속 거치게 합니다. ClickHouse Kafka 엔진 연결 예시가 있습니다.",
+      "title_en": "Confluent Kafka on AWS with TLS terminated at an NLB (Terraform)",
+      "summary_en": "Deploy Confluent Kafka on AWS with Terraform, terminate SSL at a Network Load Balancer, and have Kafka advertise the NLB address so clients stay behind it; includes a ClickHouse Kafka engine example.",
+      "category": "cloud",
+      "tags": [
+        "kafka",
+        "cloud-operations"
+      ],
+      "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/kafka/terraform-confluent-aws-nlb-ssl/README.md#한국어",
+      "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/kafka/terraform-confluent-aws-nlb-ssl/README.md#english"
+    },
+    {
+      "path": "labs/lake/terraform-glue-s3-chc-integration",
+      "title_ko": "Terraform으로 구성하는 AWS Glue 카탈로그와 ClickHouse Cloud 연동",
+      "summary_ko": "S3에 Iceberg 테이블을 만들어 Glue 크롤러로 등록한 뒤, ClickHouse Cloud에서 Glue 카탈로그를 DataLakeCatalog 데이터베이스로 붙여 조회하는 Terraform 실습입니다.",
+      "title_en": "ClickHouse Cloud and the AWS Glue Catalog with Terraform",
+      "summary_en": "Create Iceberg tables on S3, register them with a Glue crawler, and mount the Glue catalog in ClickHouse Cloud as a DataLakeCatalog database, all set up with Terraform.",
+      "category": "feature",
+      "tags": [
+        "data-lake"
+      ],
+      "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/lake/terraform-glue-s3-chc-integration/README.md#한국어",
+      "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/lake/terraform-glue-s3-chc-integration/README.md#english"
     },
     {
       "path": "labs/s3/terraform-chc-secures3-aws",
@@ -20,6 +50,10 @@
       "title_en": "ClickHouse Cloud Secure S3 Integration with Terraform",
       "summary_en": "Set up keyless, IAM role-based S3 read and write access for ClickHouse Cloud with Terraform, using the S3 table engine.",
       "category": "cloud",
+      "tags": [
+        "cloud-operations",
+        "data-lake"
+      ],
       "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/s3/terraform-chc-secures3-aws/README.md#한국어",
       "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/s3/terraform-chc-secures3-aws/README.md#english"
     }

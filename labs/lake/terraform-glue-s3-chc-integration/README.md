@@ -26,6 +26,8 @@
 
 ## English
 
+> **Related notes** (Korean): [Data Lake Catalog (25.10+)](https://clickhouse.litkhai.dev/articles/feature/data-lake-catalog-25-10/)
+
 Simple Terraform setup to integrate ClickHouse Cloud with AWS Glue Catalog using Apache Iceberg tables.
 
 ### ⚠️ Current Limitations (ClickHouse Cloud 25.8)
@@ -281,6 +283,8 @@ This will:
 ---
 
 ## 한국어
+
+> **관련 글**: [Data Lake Catalog (25.10+)](https://clickhouse.litkhai.dev/articles/feature/data-lake-catalog-25-10/)
 
 Apache Iceberg 테이블을 사용해 ClickHouse Cloud를 AWS Glue Catalog와 통합하는 간단한 Terraform 구성입니다.
 
