@@ -1,0 +1,8 @@
+# Publishing keys (tools/lab.schema.md) — published 2026-10-08
+web: true
+title_ko: "NLB에서 TLS를 종료하는 AWS 위 Confluent Kafka (Terraform)"
+summary_ko: "Terraform으로 AWS에 Confluent Kafka를 띄워 NLB에서 SSL을 종료하고, Kafka가 NLB 주소를 advertise해 클라이언트가 NLB를 계속 거치게 합니다. ClickHouse Kafka 엔진 연결 예시가 있습니다."
+title_en: "Confluent Kafka on AWS with TLS terminated at an NLB (Terraform)"
+summary_en: "Deploy Confluent Kafka on AWS with Terraform, terminate SSL at a Network Load Balancer, and have Kafka advertise the NLB address so clients stay behind it; includes a ClickHouse Kafka engine example."
+category: cloud
+tags: [kafka, cloud-operations]

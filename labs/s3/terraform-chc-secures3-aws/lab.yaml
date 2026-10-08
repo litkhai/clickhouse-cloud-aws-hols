@@ -5,3 +5,4 @@ summary_ko: "IAM 역할 기반 인증으로 키 없이 ClickHouse Cloud가 S3를
 title_en: "ClickHouse Cloud Secure S3 Integration with Terraform"
 summary_en: "Set up keyless, IAM role-based S3 read and write access for ClickHouse Cloud with Terraform, using the S3 table engine."
 category: cloud
+tags: [cloud-operations, data-lake]
