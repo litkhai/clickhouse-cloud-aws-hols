@@ -36,6 +36,8 @@
 
 ## English
 
+> **Related notes** (Korean): [ClickHouse Cloud Private Link의 이해](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-cloud-private-link/)
+
 ### Advertised Listener Fix
 
 This Terraform configuration sets up **NLB SSL termination in front of Kafka** using the **advertised listener pattern**.
@@ -537,6 +539,8 @@ See [CUSTOM_DOMAIN_SETUP.md](CUSTOM_DOMAIN_SETUP.md) for:
 ---
 
 ## 한국어
+
+> **관련 글**: [ClickHouse Cloud Private Link의 이해](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-cloud-private-link/)
 
 ### advertised listener 수정
 

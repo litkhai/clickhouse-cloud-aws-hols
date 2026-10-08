@@ -14,6 +14,8 @@
 
 ## English
 
+> **Related notes** (Korean): [ClickHouse to CHC 데이터 이관: remoteSecure 또는 S3 경유](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-to-chc-remotesecure-s3/) · [ClickHouse Cloud Private Link의 이해](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-cloud-private-link/)
+
 This Terraform configuration sets up secure S3 access for ClickHouse Cloud using IAM role-based authentication. It allows ClickHouse Cloud to read from and write to an S3 bucket using the S3 table engine without managing access keys.
 
 ### Features
@@ -682,6 +684,8 @@ Use the template from the official ClickHouse documentation to create the resour
 ---
 
 ## 한국어
+
+> **관련 글**: [ClickHouse to CHC 데이터 이관: remoteSecure 또는 S3 경유](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-to-chc-remotesecure-s3/) · [ClickHouse Cloud Private Link의 이해](https://clickhouse.litkhai.dev/articles/cloud/clickhouse-cloud-private-link/)
 
 이 Terraform 구성은 IAM 역할 기반 인증으로 ClickHouse Cloud의 안전한 S3 접근을 설정합니다. ClickHouse Cloud가 액세스 키를 관리하지 않고도 S3 테이블 엔진으로 S3 버킷을 읽고 쓸 수 있게 합니다.
 
