@@ -42,7 +42,7 @@ These labs are kept, not archived, but most have not been re-run since late 2025
 
 | Lab | What it covers | Last run |
 |-----|----------------|----------|
-| [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | Aurora PostgreSQL `aurora_analytics` (embedded DuckDB) on db.t4g, and pg_clickhouse → ClickHouse Cloud at a similar size, TPC-DS-derived SF1 / SF10 | 2026-10-09 (partial: SF1 + SF10, A, B, P) |
+| [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | Aurora PostgreSQL `aurora_analytics` (embedded DuckDB) on db.t4g, and pg_clickhouse → ClickHouse Cloud at a similar size, TPC-DS-derived SF1 / SF10 / SF100, Glue + Iceberg | 2026-10-09 (partial: SF1, SF10, SF100, SF10 on Glue + Iceberg; targets A, B, E, P) |
 
 ### 🔗 Related repositories
 
@@ -111,7 +111,7 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 
 | 실습 | 내용 | 마지막 실행 |
 |-----|----------------|----------|
-| [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | db.t4g에서 Aurora PostgreSQL `aurora_analytics`(내장 DuckDB), 비슷한 크기의 pg_clickhouse → ClickHouse Cloud, TPC-DS 파생 SF1·SF10 | 2026-10-09 (일부: SF1 + SF10, A·B·P) |
+| [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | db.t4g에서 Aurora PostgreSQL `aurora_analytics`(내장 DuckDB), 비슷한 크기의 pg_clickhouse → ClickHouse Cloud, TPC-DS 파생 SF1·SF10·SF100, Glue + Iceberg | 2026-10-09 (일부: SF1, SF10, SF100, Glue + Iceberg 위 SF10; 대상 A·B·E·P) |
 
 ### 🔗 관련 저장소
 
