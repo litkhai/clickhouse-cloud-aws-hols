@@ -51,3 +51,7 @@ aurora_instance_class = "db.t4g.large"
 # IAM role of the ClickHouse Cloud service (console: service settings, Network security
 # information). Empty = no role for ClickHouse Cloud is created; fill it in and apply again later.
 # chc_iam_role_arn = ""
+
+# Optional Iceberg variant: Glue databases, Glue interface endpoint, Athena workgroup, IAM (README,
+# "Glue catalog and Iceberg"). Adds resources and edits IAM policy documents in place; nothing is replaced.
+# enable_glue = true

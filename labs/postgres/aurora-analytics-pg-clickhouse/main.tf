@@ -29,6 +29,10 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_caller_identity" "current" {
+  count = var.enable_glue ? 1 : 0
+}
+
 # AL2023 arm64 AMI from the public SSM parameter (latest at apply time)
 data "aws_ssm_parameter" "al2023_arm64" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"
@@ -40,6 +44,31 @@ locals {
   engine_major   = split(".", var.aurora_engine_version)[0]
   is_serverless  = var.aurora_instance_class == "db.serverless"
   cluster_params = merge({ "aurora_analytics.enabled" = "true" }, var.extra_cluster_parameters)
+
+  # ---- Glue catalog + Iceberg variant (enable_glue). Names come from the lab prefix: lowercase, "_" only.
+  glue_db_base     = replace(lower(local.name), "/[^a-z0-9_]/", "_")
+  glue_parquet_db  = "${local.glue_db_base}_parquet"
+  glue_iceberg_db  = "${local.glue_db_base}_iceberg"
+  account_id       = try(data.aws_caller_identity.current[0].account_id, "")
+  glue_arn_prefix  = "arn:aws:glue:${var.aws_region}:${local.account_id}"
+  glue_catalog_arn = "${local.glue_arn_prefix}:catalog"
+  # A Glue permission is checked on the catalog, the database and the table (Athena user guide,
+  # "Configure access to databases and tables in the AWS Glue Data Catalog", read 2026-10-09).
+  glue_resources = tolist(concat(
+    [local.glue_catalog_arn],
+    [for d in [local.glue_parquet_db, local.glue_iceberg_db] : "${local.glue_arn_prefix}:database/${d}"],
+    [for d in [local.glue_parquet_db, local.glue_iceberg_db] : "${local.glue_arn_prefix}:table/${d}/*"],
+  ))
+  # Read side, for the Aurora role and the ClickHouse Cloud role (Aurora docs "Working with foreign tables":
+  # glue:GetTable + glue:GetTables; GetDatabase / GetDatabases added by the lab's spec)
+  glue_read_statements = var.enable_glue ? [
+    {
+      Sid      = "GlueRead"
+      Effect   = "Allow"
+      Action   = ["glue:GetTable", "glue:GetTables", "glue:GetDatabase", "glue:GetDatabases"]
+      Resource = local.glue_resources
+    }
+  ] : []
 
   # pg_clickhouse 0.11.0 multi-arch (amd64 + arm64) image index digests, read from the
   # GHCR manifest API on 2026-10-09 for the tags 17-0.11.0 and 18-0.11.0.
@@ -286,18 +315,21 @@ resource "aws_iam_role_policy" "aurora_s3" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject"]
-        Resource = "${aws_s3_bucket.data.arn}/*"
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket"]
-        Resource = aws_s3_bucket.data.arn
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Effect   = "Allow"
+          Action   = ["s3:GetObject"]
+          Resource = "${aws_s3_bucket.data.arn}/*"
+        },
+        {
+          Effect   = "Allow"
+          Action   = ["s3:ListBucket"]
+          Resource = aws_s3_bucket.data.arn
+        }
+      ],
+      local.glue_read_statements
+    )
   })
 }
 
@@ -335,18 +367,21 @@ resource "aws_iam_role_policy" "chc_s3" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject"]
-        Resource = "${aws_s3_bucket.data.arn}/*"
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket"]
-        Resource = aws_s3_bucket.data.arn
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Effect   = "Allow"
+          Action   = ["s3:GetObject"]
+          Resource = "${aws_s3_bucket.data.arn}/*"
+        },
+        {
+          Effect   = "Allow"
+          Action   = ["s3:ListBucket"]
+          Resource = aws_s3_bucket.data.arn
+        }
+      ],
+      local.glue_read_statements
+    )
   })
 }
 
@@ -416,6 +451,37 @@ resource "aws_iam_role_policy" "ec2" {
           Action   = ["secretsmanager:GetSecretValue"]
           Resource = aws_rds_cluster.this[0].master_user_secret[0].secret_arn
         }
+      ] : [],
+      var.enable_glue ? [
+        {
+          Sid    = "AthenaWorkgroup"
+          Effect = "Allow"
+          Action = [
+            "athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults",
+            "athena:StopQueryExecution", "athena:GetWorkGroup"
+          ]
+          Resource = ["arn:aws:athena:${var.aws_region}:${local.account_id}:workgroup/${aws_athena_workgroup.this[0].name}"]
+        },
+        {
+          # CREATE EXTERNAL TABLE / CTAS / DROP through Athena, and the reads of the 30-iceberg.sh checks.
+          # GetTables, GetPartitions, GetDatabases: Athena user guide, "Configure access to databases and tables
+          # in the AWS Glue Data Catalog", read 2026-10-09 (permissions on catalog, database and table).
+          Sid    = "GlueDdl"
+          Effect = "Allow"
+          Action = [
+            "glue:CreateTable", "glue:UpdateTable", "glue:DeleteTable", "glue:GetTable", "glue:GetTables",
+            "glue:GetPartitions", "glue:GetDatabase", "glue:GetDatabases"
+          ]
+          Resource = local.glue_resources
+        },
+        {
+          # Athena checks the results bucket before it writes. Not confirmed in the docs read on 2026-10-09:
+          # remove it if an Athena run shows it is not needed.
+          Sid      = "AthenaResultsBucketLocation"
+          Effect   = "Allow"
+          Action   = ["s3:GetBucketLocation"]
+          Resource = [aws_s3_bucket.data.arn]
+        }
       ] : []
     )
   })
@@ -429,6 +495,83 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 resource "aws_iam_instance_profile" "ec2" {
   name_prefix = "${local.name}-ec2-"
   role        = aws_iam_role.ec2.name
+}
+
+# ---------------------------------------------------------------- Glue catalog + Athena (enable_glue)
+# The Iceberg variant of the lab (README "Glue catalog and Iceberg (optional)"). Everything here is new:
+# turning enable_glue on adds these resources and edits only the IAM policy documents in place.
+
+resource "aws_glue_catalog_database" "parquet" {
+  count = var.enable_glue ? 1 : 0
+
+  name        = local.glue_parquet_db
+  description = "aurora_analytics lab: external tables over the generated Parquet (staging for the Iceberg CTAS)"
+}
+
+resource "aws_glue_catalog_database" "iceberg" {
+  count = var.enable_glue ? 1 : 0
+
+  name        = local.glue_iceberg_db
+  description = "aurora_analytics lab: Iceberg tables (created by 30-iceberg.sh through Athena)"
+}
+
+# Aurora reads the catalog from the private subnets: Glue interface endpoint with private DNS
+# (AWS docs "Working with foreign tables", read 2026-10-09).
+resource "aws_security_group" "glue_endpoint" {
+  count = var.enable_glue ? 1 : 0
+
+  name_prefix = "${local.name}-glue-ep-"
+  description = "Glue interface endpoint: 443 from the VPC"
+  vpc_id      = aws_vpc.this.id
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "glue_endpoint_https" {
+  count = var.enable_glue ? 1 : 0
+
+  security_group_id = aws_security_group.glue_endpoint[0].id
+  description       = "HTTPS from the VPC"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = aws_vpc.this.cidr_block
+}
+
+resource "aws_vpc_endpoint" "glue" {
+  count = var.enable_glue ? 1 : 0
+
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.aws_region}.glue"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.glue_endpoint[0].id]
+  private_dns_enabled = true
+
+  tags = { Name = "${local.name}-glue" }
+}
+
+resource "aws_athena_workgroup" "this" {
+  count = var.enable_glue ? 1 : 0
+
+  name          = local.name
+  description   = "aurora_analytics lab: CTAS of the Iceberg tables"
+  force_destroy = true
+
+  configuration {
+    enforce_workgroup_configuration    = true
+    publish_cloudwatch_metrics_enabled = false
+
+    result_configuration {
+      output_location = "s3://${aws_s3_bucket.data.bucket}/athena/"
+
+      encryption_configuration {
+        encryption_option = "SSE_S3"
+      }
+    }
+  }
 }
 
 # ---------------------------------------------------------------- Aurora

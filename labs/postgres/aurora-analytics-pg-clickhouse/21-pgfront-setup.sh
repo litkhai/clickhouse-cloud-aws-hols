@@ -1,6 +1,6 @@
 #!/bin/bash
 # PostgreSQL front end for target P / P-s3: pg_clickhouse + the ClickHouse foreign tables.
-#   ./21-pgfront-setup.sh --sf N [--s3-tables] [--dry-run]
+#   ./21-pgfront-setup.sh --sf N [--s3-tables] [--db NAME] [--dry-run]
 # Works with a ClickHouse Managed Postgres service (PGFRONT_SSLMODE=require) or the Terraform EC2 front
 # end (disable): the connection is only the PGFRONT_* keys. Run on the generator after 20-clickhouse-load.sh.
 #  1. CREATE EXTENSION pg_clickhouse; record installed and available version (pg_available_extensions);
@@ -9,6 +9,9 @@
 #     The ClickHouse Cloud host gets TLS on port 9440 by default.
 #  3. IMPORT FOREIGN SCHEMA sf<N> INTO schema sf<N> (and sf<N>_s3 -> sf<N>_s3 with --s3-tables); \d dump.
 # The query text is unqualified; run.py sets search_path = sf<N> (P) or sf<N>_s3 (P-s3), as for Aurora.
+# --db NAME    set up only the ClickHouse database NAME (default sf<N>) as server ch_<NAME> and schema <NAME>, e.g.
+#              --db ice_sf<N> for the Iceberg tables of 22-clickhouse-iceberg.sh; the sf<N> setup is left as it is.
+#              Out then: out/P/schema-<NAME>.txt, out/P/21-pgfront-setup-<NAME>.log. Not with --s3-tables.
 # Option names: pg_clickhouse v0.11.0 reference, "CREATE SERVER" / "CREATE USER MAPPING" / "IMPORT FOREIGN
 # SCHEMA": https://github.com/ClickHouse/pg_clickhouse/blob/v0.11.0/doc/pg_clickhouse.md (read 2026-10-09).
 # Rehearsal-only overrides: PGCH_HOST / PGCH_PORT (where the front end reaches ClickHouse), CH_SECURE=0.
@@ -16,17 +19,22 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-SF=""; S3T=0; DRY=0
+SF=""; S3T=0; DRY=0; DB=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --sf) SF="${2:?--sf needs a value}"; shift 2 ;;
     --s3-tables) S3T=1; shift ;;
+    --db) DB="${2:?--db needs a name}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
-    -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,18p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
 case "$SF" in *[!0-9]*|'') die "--sf N is required (integer)" ;; esac
+case "$DB" in *[!a-z0-9_]*) die "--db must be lowercase letters, digits and _" ;; esac
+[ -z "$DB" ] || [ "$S3T" = 0 ] || die "--db and --s3-tables do not combine"
+MAIN_DB="${DB:-sf$SF}"                       # the database whose server the version lines ask
+SCHEMA_FILE="schema-${DB:-sf$SF}.txt"        # default name unchanged: schema-sf<N>.txt
 
 load_config
 require_keys CH_HOST CH_USER CH_PASSWORD
@@ -34,7 +42,7 @@ sqlq() { printf "%s" "$1" | sed "s/'/''/g"; }   # SQL string literal body
 if [ "$DRY" = 1 ]; then
   pgfront_psql() { echo "-- pgfront_psql $*" >&2; if [ "${1:-}" != "-c" ]; then cat >&2; fi; }
 else
-  set_log P "21-pgfront-setup-sf$SF"
+  set_log P "21-pgfront-setup-${DB:-sf$SF}"
 fi
 mkdir -p "$OUT_DIR/P"
 VERFILE="$OUT_DIR/P/pg_clickhouse-version.txt"
@@ -92,14 +100,14 @@ SQL
     pgfront_psql -At -c "SELECT count(*) || ' foreign tables in schema $db' FROM information_schema.foreign_tables WHERE foreign_table_schema = '$db'"
     for t in $TPCDS_TABLES; do echo "\\d $db.$t"; done | pgfront_psql
     pgfront_psql -At -c "SELECT 'clickhouse_server_version=' || clickhouse_server_version('$srv')"
-  } >> "$OUT_DIR/P/schema-sf$SF.txt"
+  } >> "$OUT_DIR/P/$SCHEMA_FILE"
 }
-: > "$OUT_DIR/P/schema-sf$SF.txt"
-setup_db "sf$SF"
+: > "$OUT_DIR/P/$SCHEMA_FILE"
+setup_db "$MAIN_DB"
 [ "$S3T" = 0 ] || setup_db "sf${SF}_s3"
 # the parameter exists once the extension is loaded in the session: call one of its functions first
 pgfront_psql -At >> "$VERFILE" <<SQL
-SELECT 'clickhouse_server_version=' || clickhouse_server_version('ch_sf$SF');
+SELECT 'clickhouse_server_version=' || clickhouse_server_version('ch_$MAIN_DB');
 SELECT 'pg_clickhouse.session_settings=' || current_setting('pg_clickhouse.session_settings');
 SQL
-echo "done: $VERFILE  $OUT_DIR/P/schema-sf$SF.txt"
+echo "done: $VERFILE  $OUT_DIR/P/$SCHEMA_FILE"

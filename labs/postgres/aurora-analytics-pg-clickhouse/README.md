@@ -101,6 +101,27 @@ Interference (stage 3), the CloudWatch export and the §9 report are listed in
 
 Put ClickHouse Cloud services back to their recorded sizes afterwards.
 
+### Glue catalog and Iceberg (optional)
+
+**Not run yet** (written 2026-10-09, checked only with `terraform validate`, `bash -n` and a local type-mapping check).
+The same TPC-DS data as Iceberg tables in the AWS Glue Data Catalog, read by `aurora_analytics`
+(`IMPORT FOREIGN SCHEMA`, catalog ARN) and by ClickHouse Cloud. Docs read 2026-10-09: Aurora User Guide "Working with
+foreign tables"; Athena User Guide "CREATE TABLE AS" (Iceberg CTAS properties); ClickHouse "AWS Glue catalog"
+(`DataLakeCatalog`, `allow_database_glue_catalog`, `aws_role_arn` from v26.2) and "Iceberg table engine"
+(`IcebergS3`, `extra_credentials`). The ClickHouse Glue catalog integration is Beta; it is only a count smoke check here,
+the 103 queries go through `IcebergS3` tables.
+
+1. `enable_glue = true` in `terraform.tfvars`, then `./deploy.sh` (Glue databases, Glue interface endpoint, Athena
+   workgroup, IAM; only IAM policy documents change in place; `config.env` gets `GLUE_*` and `ATHENA_WORKGROUP`).
+2. `./30-iceberg.sh --sf N`: Parquet schema (DuckDB) → Athena external tables → CTAS to Iceberg → counts
+   (`out/iceberg-sf<N>.csv`). `--drop` removes both sets.
+3. `./11-aurora-glue.sh --sf N`: schema `ice_sf<N>` with the plain table names on Aurora.
+4. `./22-clickhouse-iceberg.sh --sf N`: Glue catalog smoke check (`out/P/glue-catalog-sf<N>.csv`) and database
+   `ice_sf<N>` with `IcebergS3` tables.
+5. `./21-pgfront-setup.sh --sf N --db ice_sf<N>`: the pg_clickhouse server `ch_ice_sf<N>` and schema `ice_sf<N>`.
+6. `run.py --target B|P --sf N --phase correctness --schema ice_sf<N> --tag ice` (`out/<target>/sf<N>-<phase>-ice.csv`;
+   `compare.py --sf N --tag ice`).
+
 ### Rehearse locally
 
 `local/rehearse.sh --sf 1` runs paths P and R at SF1 with Docker only (PostgreSQL 18 +
@@ -199,6 +220,27 @@ Amazon Linux 2023의 Python은 3.9이고 `duckdb` 1.5.6은 3.10 이상이 필요
 ```
 
 끝나면 ClickHouse Cloud 서비스를 기록해 둔 원래 크기로 되돌리세요.
+
+### Glue 카탈로그와 Iceberg (선택)
+
+**아직 실행하지 않음** (2026-10-09 작성, `terraform validate`·`bash -n`·로컬 타입 매핑 확인만 함).
+같은 TPC-DS 데이터를 AWS Glue Data Catalog의 Iceberg 테이블로 두고 `aurora_analytics`(`IMPORT FOREIGN SCHEMA`,
+카탈로그 ARN)와 ClickHouse Cloud가 읽습니다. 2026-10-09에 읽은 문서: Aurora User Guide "Working with foreign
+tables", Athena User Guide "CREATE TABLE AS"(Iceberg CTAS 속성), ClickHouse "AWS Glue catalog"(`DataLakeCatalog`,
+`allow_database_glue_catalog`, `aws_role_arn`은 v26.2부터)와 "Iceberg table engine"(`IcebergS3`, `extra_credentials`).
+ClickHouse의 Glue 카탈로그 연동은 Beta라서 여기서는 건수 확인(smoke check)에만 쓰고, 103개 쿼리는 `IcebergS3` 테이블로
+돌립니다.
+
+1. `terraform.tfvars`에 `enable_glue = true`, 이어서 `./deploy.sh` (Glue 데이터베이스, Glue 인터페이스 엔드포인트,
+   Athena 워크그룹, IAM. 기존 리소스는 IAM 정책 문서만 제자리 변경. `config.env`에 `GLUE_*`, `ATHENA_WORKGROUP` 추가).
+2. `./30-iceberg.sh --sf N`: Parquet 스키마(DuckDB) → Athena 외부 테이블 → CTAS로 Iceberg → 건수
+   (`out/iceberg-sf<N>.csv`). `--drop`은 두 세트를 모두 지웁니다.
+3. `./11-aurora-glue.sh --sf N`: Aurora에 스키마 `ice_sf<N>`, 테이블 이름은 접미사 없이.
+4. `./22-clickhouse-iceberg.sh --sf N`: Glue 카탈로그 smoke check(`out/P/glue-catalog-sf<N>.csv`)와 `IcebergS3` 테이블로
+   데이터베이스 `ice_sf<N>`.
+5. `./21-pgfront-setup.sh --sf N --db ice_sf<N>`: pg_clickhouse 서버 `ch_ice_sf<N>`와 스키마 `ice_sf<N>`.
+6. `run.py --target B|P --sf N --phase correctness --schema ice_sf<N> --tag ice`
+   (`out/<target>/sf<N>-<phase>-ice.csv`, `compare.py --sf N --tag ice`).
 
 ### 로컬 리허설
 

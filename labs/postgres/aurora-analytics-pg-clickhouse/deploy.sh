@@ -103,6 +103,10 @@ o_pgfront_instance_id=$(out pgfront_instance_id)
 o_pgfront_public_ip=$(out pgfront_public_ip)
 o_generator_public_ip=$(out generator_public_ip)
 o_chc_s3_role_arn=$(out chc_s3_role_arn)
+o_glue_parquet_db=$(out glue_parquet_db)
+o_glue_iceberg_db=$(out glue_iceberg_db)
+o_athena_workgroup=$(out athena_workgroup)
+o_glue_catalog_arn=$(out glue_catalog_arn)
 
 # TLS to the front end: the EC2 one (create_pgfront = true) listens without it; a Managed Postgres service
 # (hand-filled PGFRONT_*) needs it. A value already in config.env is kept.
@@ -132,6 +136,10 @@ PGFRONT_INSTANCE_ID=$o_pgfront_instance_id
 PGFRONT_PUBLIC_IP=$o_pgfront_public_ip
 GENERATOR_PUBLIC_IP=$o_generator_public_ip
 CHC_S3_ROLE_ARN=$o_chc_s3_role_arn
+GLUE_PARQUET_DB=$o_glue_parquet_db
+GLUE_ICEBERG_DB=$o_glue_iceberg_db
+ATHENA_WORKGROUP=$o_athena_workgroup
+GLUE_CATALOG_ARN=$o_glue_catalog_arn
 # filled by hand after creating the ClickHouse Cloud service
 CH_HOST=$(keep CH_HOST "")
 CH_USER=$(keep CH_USER default)

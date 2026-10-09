@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Compare every target's correctness CSV with R (DuckDB, the reference) and write out/report-q2.md.
 
-    python3 compare.py --sf 1 [--targets A,B,P,...] [--fail-on-mismatch]
+    python3 compare.py --sf 1 [--targets A,B,P,...] [--fail-on-mismatch] [--tag ice]
 
 Per query and target: match (same result hash as R) | mismatch | syntax | error (timeout, oom, spill, error) |
 not run (the target's CSV has no row for the query, e.g. a --queries subset). Times are not compared. For a mismatch the report shows both row counts and whether the
 per-column sums agree, which tells a wrong answer from a tie order at a LIMIT or a rounding edge.
+--tag TAG compares the CSVs run.py wrote with --tag TAG (sf<N>-correctness-TAG.csv) of the targets with the untagged R
+reference, and writes out/report-q2-TAG.md. Without it nothing changes.
 The last row per query wins (the CSVs are append-only; a re-run replaces the verdict).
 """
 import argparse
@@ -26,8 +28,8 @@ def query_key(name):
     return (int(m.group(1)), int(m.group(2) or 0)) if m else (10 ** 6, 0)
 
 
-def load(target, sf):
-    path = os.path.join(OUT_DIR, target, "sf%d-correctness.csv" % sf)
+def load(target, sf, tag=""):
+    path = os.path.join(OUT_DIR, target, "sf%d-correctness%s.csv" % (sf, "-" + tag if tag else ""))
     if not os.path.isfile(path):
         return None
     rows = {}
@@ -90,6 +92,7 @@ def main():
     ap.add_argument("--sf", type=int, required=True)
     ap.add_argument("--targets", default="")
     ap.add_argument("--fail-on-mismatch", action="store_true")
+    ap.add_argument("--tag", default="", help="compare the CSVs written with run.py --tag TAG (R stays untagged)")
     a = ap.parse_args()
 
     ref = load("R", a.sf)
@@ -98,7 +101,7 @@ def main():
     wanted = [t for t in a.targets.split(",") if t] or ORDER
     data = {}
     for t in wanted:
-        d = load(t, a.sf)
+        d = load(t, a.sf, a.tag)
         if d is not None:
             data[t] = d
     if not data:
@@ -128,7 +131,7 @@ def main():
             v, d = res[t][q]
             out.append("| %s | %s | %s | %s |" % (t, q, v, d.replace("|", "/")))
     os.makedirs(OUT_DIR, exist_ok=True)
-    path = os.path.join(OUT_DIR, "report-q2.md")
+    path = os.path.join(OUT_DIR, "report-q2%s.md" % ("-" + a.tag if a.tag else ""))
     with open(path, "w") as f:
         f.write("\n".join(out) + "\n")
     print("\n".join(out[4:6 + len(targets)]))

@@ -157,3 +157,11 @@ variable "chc_iam_role_arn" {
   type        = string
   default     = ""
 }
+
+# ---------------------------------------------------------------- Glue catalog + Iceberg
+
+variable "enable_glue" {
+  description = "Create the Glue catalog databases, the Glue interface endpoint, the Athena workgroup and the matching IAM permissions (the optional Iceberg variant; README \"Glue catalog and Iceberg\"). Turning it on adds resources and edits IAM policy documents in place"
+  type        = bool
+  default     = false
+}

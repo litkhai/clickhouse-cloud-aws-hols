@@ -4,12 +4,17 @@
     uv run --python 3.12 --with 'psycopg[binary]' --with duckdb==1.5.6 run.py \
         --target A|B|C|D|E|P|P-s3|R --sf N --phase correctness|scale \
         [--queries query01,14_1 ...] [--warm 3] [--timeout 600] \
-        [--cold clear-cache|reboot|none] [--r-db PATH] [--pause 5] [--resume]
+        [--cold clear-cache|reboot|none] [--r-db PATH] [--pause 5] [--resume] [--schema NAME] [--tag TAG]
 
 Targets: A-E Aurora (aurora_analytics foreign tables), P the pg_clickhouse front end over ClickHouse
 MergeTree tables, P-s3 the same front end over the S3-engine tables, R DuckDB on the generator.
 PG is for the local rehearsal only: plain PostgreSQL in the front-end image (database $PGPLAIN_DB,
 default "plain", on the PGFRONT_* host) over the same data loaded by COPY.
+
+--schema NAME  search_path schema of the Aurora and P targets instead of sf<N> (P-s3: sf<N>_s3), e.g. ice_sf<N> for the
+Iceberg tables of the Glue variant; for P the foreign server of the cold step and the version line is then ch_NAME.
+--tag TAG      append -TAG to the CSV name (out/<target>/sf<N>-<phase>-TAG.csv), the run_id, the explain directory and the
+cold-caches file, so a second data set does not mix with the first. Without both flags nothing changes.
 
 The query set is work/queries/*.sql (02-queries.sh). Same query text, same order, concurrency 1.
 scale = one cold run, then --warm warm runs; when the cold run is not ok the warm runs are recorded
@@ -213,7 +218,7 @@ class PgTarget(Target):
             self.password = self._aurora_password()
             self.params = dict(host=cfg["AURORA_HOST"], port=int(cfg["AURORA_PORT"]), user=cfg["AURORA_USER"],
                                dbname=cfg["AURORA_DB"], sslmode="require")
-            self.search_path = "sf%d, public" % args.sf
+            self.search_path = "%s, public" % (args.schema or "sf%d" % args.sf)
         else:
             need(cfg, "PGFRONT_HOST", "PGFRONT_PORT", "PGFRONT_USER", "PGFRONT_PASSWORD", "PGFRONT_DB")
             self.password = cfg["PGFRONT_PASSWORD"]
@@ -222,8 +227,8 @@ class PgTarget(Target):
                 db = os.environ.get("PGPLAIN_DB", "plain")
             self.params = dict(host=cfg["PGFRONT_HOST"], port=int(cfg["PGFRONT_PORT"]), user=cfg["PGFRONT_USER"],
                                dbname=db, sslmode=cfg.get("PGFRONT_SSLMODE") or "require")
-            self.search_path = "sf%d%s, public" % (args.sf, "_s3" if t == "P-s3" else "")
-        self.ch_server = "ch_sf%d%s" % (args.sf, "_s3" if t == "P-s3" else "")
+            self.search_path = "%s, public" % (args.schema or "sf%d%s" % (args.sf, "_s3" if t == "P-s3" else ""))
+        self.ch_server = "ch_%s" % (args.schema or "sf%d%s" % (args.sf, "_s3" if t == "P-s3" else ""))
         self.connect()
 
     def _aurora_password(self):
@@ -374,7 +379,7 @@ class PgTarget(Target):
                     notes.append("SYSTEM DROP %s: refused: %s" % (c, " ".join(str(e).split())[:200]))
             d = os.path.join(OUT_DIR, self.args.target)
             os.makedirs(d, exist_ok=True)
-            with open(os.path.join(d, "cold-caches-sf%d.txt" % self.args.sf), "w") as f:
+            with open(os.path.join(d, "cold-caches-sf%d%s.txt" % (self.args.sf, tag_suffix(self.args))), "w") as f:
                 f.write("\n".join(notes) + "\n")
         # PG (rehearsal): nothing to drop
 
@@ -437,6 +442,10 @@ class DuckTarget(Target):
 
 
 # ---------------------------------------------------------------------------------------------------
+def tag_suffix(args):
+    return "-" + args.tag if args.tag else ""
+
+
 def read_done(path):
     done = {}
     if os.path.isfile(path):
@@ -458,7 +467,15 @@ def main():
     ap.add_argument("--r-db", default="")
     ap.add_argument("--pause", type=float, default=5.0, help="seconds between queries")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--schema", default="", help="search_path schema for the Aurora and P targets (default sf<N>)")
+    ap.add_argument("--tag", default="", help="appended as -TAG to the CSV name, run_id and explain directory")
     args = ap.parse_args()
+    if args.schema and not re.fullmatch(r"[a-z_][a-z0-9_]*", args.schema):
+        sys.exit("--schema must be a lowercase identifier ([a-z0-9_])")
+    if args.tag and not re.fullmatch(r"[A-Za-z0-9_.]+", args.tag):
+        sys.exit("--tag may hold letters, digits, _ and . only")
+    if args.schema and args.target in ("R", "PG"):
+        sys.exit("--schema applies to the Aurora and P targets only")
 
     cfg = {} if args.target == "R" else load_config()
     tgt = DuckTarget(args, cfg) if args.target == "R" else PgTarget(args, cfg)
@@ -466,14 +483,14 @@ def main():
 
     out_dir = os.path.join(OUT_DIR, args.target)
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, "sf%d-%s.csv" % (args.sf, args.phase))
+    path = os.path.join(out_dir, "sf%d-%s%s.csv" % (args.sf, args.phase, tag_suffix(args)))
     done = read_done(path) if args.resume else {}
     new_file = not os.path.isfile(path)
-    run_id = "%s-%s-sf%d-%s" % (datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"), args.target, args.sf,
-                                args.phase)
+    run_id = "%s-%s-sf%d-%s%s" % (datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"), args.target,
+                                  args.sf, args.phase, tag_suffix(args))
     versions = json.dumps(tgt.versions(), sort_keys=True)
     inst = tgt.instance_class()
-    explain_dir = os.path.join(out_dir, "explain-sf%d" % args.sf)
+    explain_dir = os.path.join(out_dir, "explain-sf%d%s" % (args.sf, tag_suffix(args)))
 
     f = open(path, "a", newline="")
     w = csv.DictWriter(f, fieldnames=FIELDS)
