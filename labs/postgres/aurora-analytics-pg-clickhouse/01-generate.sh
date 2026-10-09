@@ -51,7 +51,9 @@ copy_sql() { # copy_sql <table>
   local t="$1" k q
   k=$(fact_order_key "$t")
   if [ -n "$k" ]; then q="SELECT * FROM $t ORDER BY $k"; else q="SELECT * FROM $t"; fi
-  echo "COPY ($q) TO '$DEST/$t/' (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 122880, FILE_SIZE_BYTES '256MB', OVERWRITE);"
+  # No trailing slash: on S3, DuckDB 1.5.6 keeps it and writes <t>//data_N.parquet; Aurora reads those
+  # keys, ClickHouse s3() lists them but fails to GET them ("key does not exist"), measured 2026-10-09.
+  echo "COPY ($q) TO '$DEST/$t' (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 122880, FILE_SIZE_BYTES '256MB', OVERWRITE);"
 }
 
 if [ "$DRY" = 1 ]; then
