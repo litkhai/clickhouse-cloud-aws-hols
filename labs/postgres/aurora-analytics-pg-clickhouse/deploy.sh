@@ -37,6 +37,7 @@ CLASS=${CLASS_OVERRIDE:-$(tfvar aurora_instance_class db.t4g.large)}
 STORAGE=$(tfvar aurora_storage_type "")
 KEY_NAME=$(tfvar key_name "<your-key>")
 CREATE_AURORA=$(tfvar create_aurora true)
+CREATE_PGFRONT=$(tfvar create_pgfront false)
 [ -n "$STORAGE" ] || STORAGE=aurora   # the orderable-options API calls Aurora Standard "aurora"
 
 # ---------------------------------------------------------------- preflight (read-only)
@@ -103,6 +104,11 @@ o_pgfront_public_ip=$(out pgfront_public_ip)
 o_generator_public_ip=$(out generator_public_ip)
 o_chc_s3_role_arn=$(out chc_s3_role_arn)
 
+# TLS to the front end: the EC2 one (create_pgfront = true) listens without it; a Managed Postgres service
+# (hand-filled PGFRONT_*) needs it. A value already in config.env is kept.
+PGFRONT_SSLMODE_DEFAULT=require
+[ "$CREATE_PGFRONT" != "true" ] || PGFRONT_SSLMODE_DEFAULT=disable
+
 umask 077
 cat > config.env.new <<ENV
 AWS_REGION=$o_aws_region
@@ -121,6 +127,7 @@ PGFRONT_PORT=5432
 PGFRONT_USER=postgres
 PGFRONT_PASSWORD=$o_pgfront_password
 PGFRONT_DB=postgres
+PGFRONT_SSLMODE=$(keep PGFRONT_SSLMODE "$PGFRONT_SSLMODE_DEFAULT")
 PGFRONT_INSTANCE_ID=$o_pgfront_instance_id
 PGFRONT_PUBLIC_IP=$o_pgfront_public_ip
 GENERATOR_PUBLIC_IP=$o_generator_public_ip

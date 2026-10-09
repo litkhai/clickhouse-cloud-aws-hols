@@ -43,3 +43,8 @@ labs/billing/*/out/
 labs/postgres/*/out/
 labs/postgres/*/config.env
 labs/postgres/*/config.env.destroyed-*
+# aurora-analytics lab: generated data and the fetched query set (work/), also for the local rehearsal
+# (out/rehearsal/ and work/rehearsal/ are covered by the two rules above and this one)
+labs/postgres/*/work/
+labs/postgres/*/*.duckdb
+labs/postgres/*/**/*.parquet
