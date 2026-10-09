@@ -18,7 +18,9 @@
 
 # The single query set: tpcds-scripts engines/duckdb/queries at this commit (PR litkhai/tpcds-scripts#11;
 # re-pin to the merge commit here, nowhere else).
-TPCDS_SCRIPTS_SHA=1e4870cc2d153ff4716182c9a4f115a65b2d60f9
+# Merge commit of litkhai/tpcds-scripts#11 (2026-10-10); engines/ is identical to 1e4870cc, the PR head the
+# 2026-10-09 runs used (git diff 1e4870cc b107f50 -- engines/ is empty).
+TPCDS_SCRIPTS_SHA=b107f50f24ca978e7a025623fdffc5a6806df916
 TPCDS_SCRIPTS_URL=https://github.com/litkhai/tpcds-scripts
 
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
