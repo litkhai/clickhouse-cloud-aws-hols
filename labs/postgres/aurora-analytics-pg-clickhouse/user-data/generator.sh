@@ -14,7 +14,7 @@ DUCKDB_SHA256=1af0541e649a3ae34eb20eec2ca564308bf0e8993e5d6dba6be77bfb289a2718
 # postgresql17 / postgresql18 hold psql and pg_dump; postgresql17-contrib / postgresql18-contrib hold
 # pgbench. The release notes list the same names:
 # https://docs.aws.amazon.com/linux/al2023/release-notes/all-packages-AL2023.9.html
-dnf install -y git python3 python3-pip jq tar gzip \
+dnf install -y git python3 python3-pip jq tar gzip patch \
   "postgresql${PG_MAJOR}" "postgresql${PG_MAJOR}-contrib"
 
 # AWS CLI v2 ships in the AL2023 AMI; install it only if a minimal image lacks it.
