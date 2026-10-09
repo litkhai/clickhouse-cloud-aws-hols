@@ -539,7 +539,12 @@ resource "aws_instance" "generator" {
     "export PG_MAJOR=${var.pg_major}",
     file("${path.module}/user-data/generator.sh"),
   ])
-  user_data_replace_on_change = true
+  # A user-data or AMI change must not replace the generator in the middle of a run: it holds R's
+  # DuckDB database and the run's out/ (lost once on 2026-10-09, when a user-data edit replaced it).
+  user_data_replace_on_change = false
+  lifecycle {
+    ignore_changes = [user_data, ami]
+  }
 
   tags = { Name = "${local.name}-generator" }
 }
