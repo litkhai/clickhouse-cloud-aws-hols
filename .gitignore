@@ -37,3 +37,9 @@ tfplan
 
 # usage-cost lab: raw API responses and flattened records (real names, IDs and amounts live there)
 labs/billing/*/out/
+
+# aurora-analytics lab: preflight output and the generated config (holds passwords). The destroyed-*
+# copy deploy/destroy leave behind holds them too.
+labs/postgres/*/out/
+labs/postgres/*/config.env
+labs/postgres/*/config.env.destroyed-*
