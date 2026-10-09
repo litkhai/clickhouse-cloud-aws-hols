@@ -64,19 +64,42 @@ Geometric mean over the 82 queries every target completed:
 - Aurora differs from R on q14_2, q21, q34, q83; P on q16, q34, q44, q94.
 - A and B were within 2 % of each other on every aggregate above.
 
+### Performance comparison, SF10, the 82 queries every target completed
+
+Per-query ratio = Aurora time ÷ P time (above 1: P faster). One cold and one warm run per query, so single
+queries can move; read the totals and medians.
+
+| | Aurora B (t4g.large) | P (pg_clickhouse) | B ÷ P per query: median / geomean | P faster on |
+|---|---|---|---|---|
+| cold total | 1,589 s | 758 s | 1.45 / 1.51 | 51 of 82 (25 by 3x or more; 5 slower by 3x or more) |
+| warm total | 661 s | 620 s | 0.55 / 0.60 | 23 of 82 (9 by 3x or more; 25 slower by 3x or more) |
+
+- Cold: P is about 2x faster in total. Aurora reads Parquet from S3 on a cold cache; ClickHouse reads its own
+  MergeTree tables. The ClickHouse load time is not in these totals.
+- Warm: the totals are close, but the median query is about 1.8x faster on Aurora. P wins big on heavy
+  aggregation / window queries (warm B ÷ P: q36 14.0, q66 9.6, q86 8.1, q47 7.5, q57 6.3) and loses on light
+  ones (q54, q31 0.04; q02 0.06; q39_2 0.07; q39_1 0.08): every P query pays a round trip from the front end
+  to ClickHouse over TLS (inferred, not measured). Among the 26 fully pushed-down queries the warm median is
+  0.38, among the 56 partly pushed-down 0.61.
+- A ÷ B per query: median 1.01 cold, 1.02 warm; no query differs by 3x.
+
 ### CloudWatch, 04:20–05:35 UTC, 5-minute periods
 
 | metric | A db.t4g.medium | B db.t4g.large |
 |---|---|---|
-| `CPUCreditBalance` | 0 for the whole window | 0 for the whole window |
-| `CPUSurplusCreditsCharged` | 0 | 0 |
+| `CPUCreditBalance` | 0 from the start of the runs | 0 after 04:15 (≤ 4 before) |
+| `CPUSurplusCreditBalance` (credits borrowed) | rose to 26.5 by 05:30 | rose to 27.8 by 05:30 |
+| `CPUSurplusCreditsCharged` (in the window) | 0 | 0 |
 | `CPUUtilization` max / avg | 57.7 % / 37.6 % | 52.8 % / 37.7 % |
 | `AuroraAnalyticsMemoryUsage` max | 478 MB | 1.0 GB |
 | `AuroraAnalyticsDiskSpillSize` max | 852 MB | 585 MB |
 | `FreeableMemory` min | 1.66 GB | 5.18 GB |
 
-Both instances ran with no CPU credits, which may be why the 4 GiB and 8 GiB instances performed alike
-(inferred, not tested). Queries used their whole `query_mem` and spilled to local storage; none was cancelled
+Both instances ran out of earned CPU credits and kept running above baseline on borrowed (surplus) credits:
+Aurora T4g instances run in Unlimited mode and are charged $0.09 per vCPU-hour for CPU used above the baseline
+over a rolling 24 hours (Aurora pricing page, read 2026-10-09). So they were **not** held at baseline, and CPU
+reached 99.7 % in the busiest 15 minutes. Why the 4 GiB and 8 GiB instances performed alike is not known (both
+have 2 vCPU; not tested further). Queries used their whole `query_mem` and spilled to local storage; none was cancelled
 for memory.
 
 ### Found on the way (all fixed in the lab, see git log)
@@ -144,11 +167,24 @@ SF10은 차가운 1회 + 성공 시 따뜻한 1회·120초. **실행 안 함**: 
 모든 대상이 완료한 82개의 기하평균: 차가운 실행 A 9.35초 · B 9.63초 · P 6.37초, 따뜻한 실행 A 2.48초 · B 2.52초 · P 4.17초.
 Aurora 시간 초과(A·B 같은 9개): q04·q05·q11·q14_1·q67·q70·q74·q77·q80. A와 B는 모든 집계에서 2% 안쪽 차이.
 
+### 성능 비교 — SF10, 세 대상이 모두 완료한 82개
+
+질의별 비율 = Aurora 시간 ÷ P 시간(1보다 크면 P가 빠름). 질의마다 차가운 1회·따뜻한 1회라 개별 질의는 흔들릴 수 있음, 합계와 중앙값으로 볼 것.
+
+| | Aurora B (t4g.large) | P (pg_clickhouse) | B ÷ P 질의별 중앙값 / 기하평균 | P가 빠른 질의 |
+|---|---|---|---|---|
+| 차가운 실행 합계 | 1,589초 | 758초 | 1.45 / 1.51 | 82개 중 51개 (3배 이상 25개, 3배 이상 느림 5개) |
+| 따뜻한 실행 합계 | 661초 | 620초 | 0.55 / 0.60 | 82개 중 23개 (3배 이상 9개, 3배 이상 느림 25개) |
+
+- 차가운 실행: 합계로 P가 약 2배 빠름. Aurora는 빈 캐시에서 S3의 Parquet를 읽고, ClickHouse는 자기 MergeTree를 읽음. ClickHouse 적재 시간은 합계에 없음.
+- 따뜻한 실행: 합계는 비슷하지만 질의 중앙값은 Aurora가 약 1.8배 빠름. P는 무거운 집계·윈도 질의에서 크게 이김(q36 14.0, q66 9.6, q86 8.1, q47 7.5, q57 6.3배), 가벼운 질의에서 짐(q54·q31 0.04, q02 0.06, q39_2 0.07, q39_1 0.08) — P는 질의마다 앞단→ClickHouse TLS 왕복이 붙음(추정, 측정 안 함). 전부 내려간 26개의 따뜻한 중앙값 0.38, 일부만 내려간 56개 0.61.
+- A ÷ B 질의별 중앙값: 차가운 1.01, 따뜻한 1.02, 3배 이상 차이 나는 질의 없음.
+
 ### CloudWatch (04:20–05:35 UTC, 5분)
 
-두 인스턴스 모두 `CPUCreditBalance`가 **구간 내내 0**, `CPUSurplusCreditsCharged` 0, CPU 최대 57.7%(A)·52.8%(B).
+두 인스턴스 모두 적립 크레딧(`CPUCreditBalance`)이 곧 0이 되었고, **빌린 크레딧(`CPUSurplusCreditBalance`)이 05:30까지 26.5(A)·27.8(B)로 늘며 기준선 위에서 계속 실행**. Aurora T4g는 Unlimited 모드이고 24시간 이동 평균이 기준선을 넘는 CPU 사용분을 vCPU-시간당 $0.09로 과금(Aurora 가격 페이지, 2026-10-09 확인). 즉 기준 성능에 묶이지 **않았고**, 가장 바쁜 15분에는 CPU 99.7%. 구간 내 `CPUSurplusCreditsCharged`는 0. 5분 평균 기준 CPU 최대 57.7%(A)·52.8%(B).
 분석 엔진 메모리 최대 478 MB(A)·1.0 GB(B)로 `query_mem`까지 쓰고 디스크 넘침 최대 852 MB(A)·585 MB(B), 메모리 취소 0건.
-4 GiB와 8 GiB가 비슷했던 것은 크레딧 고갈로 기준 성능에 묶였기 때문일 수 있음(추정, 시험 안 함).
+4 GiB와 8 GiB가 비슷했던 이유는 모름(둘 다 2 vCPU, 더 시험하지 않음).
 
 ### 도중에 찾은 것 (실습에 모두 반영)
 
