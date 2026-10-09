@@ -90,6 +90,30 @@ q31 24.8, q83 22.3, q71 19.8, q15 19.4, q43 19.2 (E lower).
 List prices per hour, ap-northeast-2 (Price List API and clickhouse.com/pricing, read 2026-10-09): db.t4g.large $0.227, db.r8gd.2xlarge $1.502,
 ClickHouse Cloud Enterprise $0.4801 per unit (8 GiB · 2 vCPU) → $3.84 for 32 GiB × 2, generator m7g.4xlarge $0.8024.
 
+### Run 3 — SF10 as Iceberg tables in the AWS Glue Data Catalog (12:26–13:31 UTC)
+
+Same SF10 data (DuckDB dsdgen, regenerated), registered through Athena: a Parquet external table per TPC-DS table,
+then CTAS into an Iceberg table (`table_type='ICEBERG'`, Parquet, ZSTD) in a second Glue database; `SELECT *`, no sort.
+Targets B (db.t4g.large), E (db.r8gd.2xlarge), P (ClickHouse Cloud 32 GiB per replica × 2). Cold once + one warm run, 120 s.
+
+| step | result |
+|---|---|
+| Athena CTAS → 24 Iceberg tables in Glue | 24 of 24, row counts equal to the generator's |
+| Aurora `IMPORT FOREIGN SCHEMA <glue db> … OPTIONS (location '<Glue catalog ARN>')` | 24 of 24 imported, row counts equal |
+| ClickHouse `DataLakeCatalog` (`catalog_type = 'glue'`, `aws_role_arn`) | database created; 24 of 24 counted, row counts equal |
+| ClickHouse Iceberg tables over the same files + pg_clickhouse `IMPORT FOREIGN SCHEMA` | done |
+
+| target | completed | timeout | error | different from R |
+|---|---|---|---|---|
+| B (Iceberg) | 94 | 9 | 0 | 4 (q21, q34, q77, q83) |
+| E (Iceberg) | 100 | 3 (q04, q11, q74) | 0 | 4 (q21, q34, q54, q83) |
+| P (Iceberg) | 86 | 9 | 8 | 4 (q16, q21, q44, q94) |
+
+- P errors: as at SF1 (6), plus q34 and q73 with `Not found column greater(__table4.hd_vehicle_count, 0_UInt8) in block` while reading the Iceberg files.
+- B on Iceberg vs B on Parquet (run 1), 93 queries completed on both: identical answers on all 93; cold total 1,087 s vs 1,615 s, cold geomean 8.09 s vs 8.53 s; warm total 644 s vs 588 s, warm geomean 3.16 s vs 2.28 s.
+- E vs P on Iceberg, 86 queries completed on both: cold total 814 s vs 599 s, cold geomean 3.70 s vs 2.81 s; warm total 667 s vs 552 s, warm geomean 1.49 s vs 2.00 s.
+- P pushdown: 29 full, 74 partial.
+
 ### Found during the runs (fixed in the lab)
 
 - `statement_timeout` and `pg_cancel_backend()` did not stop a running `aurora_analytics` query (q04 ran 20 minutes past 600 s and 60 s limits; cancel returned true with no change for 15 s; the query continued after the client was killed). `pg_terminate_backend()` ended it within 15 s. On P, `statement_timeout` cancelled queries.
@@ -98,7 +122,7 @@ ClickHouse Cloud Enterprise $0.4801 per unit (8 GiB · 2 vCPU) → $3.84 for 32 
 
 ### Cleanup and cost
 
-Run 1 was destroyed at about 05:50 UTC (40 resources; checked). Run 2 and the Glue / Iceberg run: see the next update.
+Run 1 was destroyed at about 05:50 UTC (40 resources), runs 2 and 3 at about 13:43 UTC (46 resources, incl. the Glue databases, Athena workgroup and Glue endpoint; the reader instances were deleted first). Checked afterwards: no cluster, instance, bucket, Glue database or VPC endpoint left. ClickHouse Cloud: the lab databases were dropped and the service sizes requested back (8–120 GiB per replica; front end r6gd.large); pg_clickhouse on the front end stays at 0.10.
 Cost: Cost Explorer by tag `purpose=aurora-analytics-t4g-test`, to be read on 2026-10-10.
 
 ---
@@ -190,6 +214,30 @@ q31 24.8, q83 22.3, q71 19.8, q15 19.4, q43 19.2(E가 낮음).
 시간당 정가(서울, Price List API와 clickhouse.com/pricing, 2026-10-09 확인): db.t4g.large $0.227, db.r8gd.2xlarge $1.502,
 ClickHouse Cloud Enterprise unit(8 GiB · 2 vCPU)당 $0.4801 → 32 GiB × 2는 $3.84, 생성 머신 m7g.4xlarge $0.8024.
 
+### 실행 3 — SF10을 AWS Glue 카탈로그의 Iceberg 테이블로 (12:26–13:31 UTC)
+
+같은 SF10 데이터(DuckDB dsdgen으로 다시 생성)를 Athena로 등록: 표마다 Parquet 외부 테이블을 만든 뒤 두 번째 Glue 데이터베이스에
+Iceberg 테이블로 CTAS(`table_type='ICEBERG'`, Parquet, ZSTD), `SELECT *`, 정렬 없음.
+대상 B(db.t4g.large), E(db.r8gd.2xlarge), P(ClickHouse Cloud 레플리카당 32 GiB × 2). 차가운 1회 + 따뜻한 1회, 120초.
+
+| 단계 | 결과 |
+|---|---|
+| Athena CTAS → Glue에 Iceberg 테이블 24개 | 24/24, 행 수가 생성 시점과 같음 |
+| Aurora `IMPORT FOREIGN SCHEMA <glue db> … OPTIONS (location '<Glue 카탈로그 ARN>')` | 24/24 가져옴, 행 수 같음 |
+| ClickHouse `DataLakeCatalog`(`catalog_type = 'glue'`, `aws_role_arn`) | 데이터베이스 생성, 24/24 행 수 같음 |
+| 같은 파일 위의 ClickHouse Iceberg 테이블 + pg_clickhouse `IMPORT FOREIGN SCHEMA` | 완료 |
+
+| 대상 | 완료 | 시간 초과 | 오류 | R과 다름 |
+|---|---|---|---|---|
+| B (Iceberg) | 94 | 9 | 0 | 4 (q21·q34·q77·q83) |
+| E (Iceberg) | 100 | 3 (q04·q11·q74) | 0 | 4 (q21·q34·q54·q83) |
+| P (Iceberg) | 86 | 9 | 8 | 4 (q16·q21·q44·q94) |
+
+- P 오류: SF1과 같은 6개 + Iceberg 파일을 읽을 때 `Not found column greater(__table4.hd_vehicle_count, 0_UInt8) in block`가 난 q34·q73.
+- B의 Iceberg와 Parquet(실행 1) 비교, 둘 다 완료한 93개: 답 93개 모두 같음. 차가운 합계 1,087초 vs 1,615초, 기하평균 8.09초 vs 8.53초. 따뜻한 합계 644초 vs 588초, 기하평균 3.16초 vs 2.28초.
+- Iceberg 위의 E와 P, 둘 다 완료한 86개: 차가운 합계 814초 vs 599초, 기하평균 3.70초 vs 2.81초. 따뜻한 합계 667초 vs 552초, 기하평균 1.49초 vs 2.00초.
+- P 푸시다운: 전부 29, 일부 74.
+
 ### 실행 중 발견한 것 (실습에 반영)
 
 - 실행 중인 `aurora_analytics` 질의를 `statement_timeout`과 `pg_cancel_backend()`가 멈추지 못함(q04가 600초·60초 제한을 넘어 20분 실행, 취소는 true를 반환하고 15초간 변화 없음, 클라이언트를 종료해도 계속 실행). `pg_terminate_backend()`는 15초 안에 종료. P에서는 `statement_timeout`이 질의를 취소함.
@@ -198,5 +246,5 @@ ClickHouse Cloud Enterprise unit(8 GiB · 2 vCPU)당 $0.4801 → 32 GiB × 2는 
 
 ### 정리와 비용
 
-실행 1은 05:50 UTC경 삭제(40개, 확인함). 실행 2와 Glue·Iceberg 실행은 다음 갱신에서.
+실행 1은 05:50 UTC경(40개), 실행 2·3은 13:43 UTC경(46개, Glue 데이터베이스·Athena 작업 그룹·Glue 엔드포인트 포함, 리더 인스턴스는 먼저 삭제) 삭제. 이후 확인: 클러스터·인스턴스·버킷·Glue 데이터베이스·VPC 엔드포인트 없음. ClickHouse Cloud: 실습 데이터베이스 삭제, 서비스 크기 원복 요청(레플리카당 8–120 GiB, 앞단 r6gd.large). 앞단의 pg_clickhouse는 0.10 그대로.
 비용: 태그 `purpose=aurora-analytics-t4g-test`의 Cost Explorer, 2026-10-10에 확인 예정.
