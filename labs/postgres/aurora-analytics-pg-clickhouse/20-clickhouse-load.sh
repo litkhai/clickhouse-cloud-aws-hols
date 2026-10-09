@@ -112,7 +112,9 @@ for t in $TPCDS_TABLES; do
   STATUS=ok
   ch_client --query "INSERT INTO sf$SF.$t SELECT * FROM $SRC" || STATUS=insert_failed
   SECS=$(elapsed "$T0" "$(now)")
-  ROWS=$(ch_client --query "SELECT count() FROM sf$SF.$t" 2>/dev/null || echo "")
+  # select_sequential_consistency: on a 2-replica ClickHouse Cloud service the count right after the
+  # INSERT can land on the other replica and see fewer rows (web_sales SF10: 6,525,695 of 7,197,566, 2026-10-09).
+  ROWS=$(ch_client --query "SELECT count() FROM sf$SF.$t SETTINGS select_sequential_consistency = 1" 2>/dev/null || echo "")
   EXP=$(expected_rows "$t")
   if [ "$STATUS" = ok ] && [ -n "$EXP" ] && [ "$ROWS" != "$EXP" ]; then STATUS="rows_differ"; fi
   [ "$STATUS" = ok ] || FAILED=1
