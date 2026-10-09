@@ -43,8 +43,8 @@ AURORA_CLASSES = {
     "A": ("db.t4g.medium",),
     "B": ("db.t4g.large",),
     "C": ("db.serverless",),
-    "D": ("db.r8g.large",),
-    "E": ("db.r8gd.large", "db.r8gd.xlarge"),
+    "D": ("db.r8g.large", "db.r8g.2xlarge"),
+    "E": ("db.r8gd.large", "db.r8gd.xlarge", "db.r8gd.2xlarge"),
 }
 
 # caches ClickHouse Cloud may or may not accept; every outcome is recorded
