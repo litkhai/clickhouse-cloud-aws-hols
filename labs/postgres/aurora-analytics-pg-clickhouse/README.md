@@ -1,19 +1,15 @@
 # Aurora PostgreSQL `aurora_analytics` on db.t4g — and pg_clickhouse at a similar size
 
-> **Not run end to end yet.** Prepared 2026-10-09. Run on 2026-10-09: `deploy.sh` (apply, AWS
-> provider 5.100.0), then stage 0 only on A (db.t4g.medium) and B (db.t4g.large), Aurora PostgreSQL 18.6,
-> `aurora_analytics` 1.0.0, ap-northeast-2: the extension installs, a Parquet foreign table infers its
-> schema, and `count(*)` over SF1 `store_sales` returns 2,880,404 rows on both. Default `query_mem` 466,979 kB (A)
-> and 977,187 kB (B). Also run: the local SF1 rehearsal in [local/](local/) (Docker only, `local/REHEARSAL.md`).
-> Not run yet: correctness over all 103 queries, SF100, C–E, P on ClickHouse Cloud, interference, `destroy.sh`.
-> The run is tracked in [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43).
+> **Run on 2026-10-09, partly** (deploy → run → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
+> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): targets A, B and P at SF1 and SF10.
+> Results: [RESULTS.md](RESULTS.md). Not run: SF100, C, D, E, P-s3, interference, the tuned run — tracked in
+> [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43). Changed after that run without a re-run:
+> none.
 >
-> **아직 끝까지 실행하지 않음.** 2026-10-09 준비. 2026-10-09 실행: `deploy.sh`(apply, AWS provider 5.100.0),
-> 이어서 A(db.t4g.medium)·B(db.t4g.large)에서 단계 0만, Aurora PostgreSQL 18.6, `aurora_analytics` 1.0.0, 서울:
-> 확장 설치, Parquet 외래 테이블 스키마 추론, SF1 `store_sales` `count(*)` = 2,880,404행이 둘 다 됨. 기본
-> `query_mem`은 466,979 kB(A), 977,187 kB(B). 그 밖에 [local/](local/)의 SF1 로컬 리허설(Docker만, `local/REHEARSAL.md`).
-> 아직 안 한 것: 103개 질의 정확성, SF100, C–E, ClickHouse Cloud의 P, 간섭, `destroy.sh`.
-> 실제 실행은 [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43)에서 추적.
+> **2026-10-09 일부 실행** (deploy → 실행 → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
+> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): A·B·P를 SF1·SF10으로. 결과는
+> [RESULTS.md](RESULTS.md). 실행 안 함: SF100, C·D·E, P-s3, 간섭, 조정 실행 —
+> [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43)에서 추적. 그 실행 뒤 재실행 없이 바뀐 것: 없음.
 
 [English](#english) | [한국어](#한국어)
 
@@ -41,7 +37,7 @@ The test plan — questions, targets, rules, report template — is [PLAN.md](PL
 | C | Aurora Serverless v2, 0.5–8 ACU | variable |
 | D | Aurora db.r8g.large (EBS) | 16 GiB |
 | E (optional) | Aurora db.r8gd.xlarge (NVMe) — `db.r8gd.large` is not orderable in ap-northeast-2 | 32 GiB |
-| P | PostgreSQL 18 front end, ClickHouse Managed Postgres r6gd.large (2 vCPU · 16 GiB: same vCPU as db.t4g.large, twice the memory — the resize API accepted m6gd.large but did not apply it, 2026-10-09) + pg_clickhouse → ClickHouse Cloud, 8 GiB per replica, data in MergeTree | 16 + 8 × 2 GiB |
+| P | PostgreSQL 18 front end, ClickHouse Managed Postgres, 2 vCPU (r6gd.large 16 GiB or m6gd.large 8 GiB during the 2026-10-09 run — see RESULTS.md) + pg_clickhouse → ClickHouse Cloud, 8 GiB per replica, data in MergeTree | 16 + 8 × 2 GiB |
 | P-s3 (optional) | the same front end → ClickHouse S3-engine tables over the same Parquet files | same |
 | R | DuckDB 1.5.6 on the generator, over its local database file — the correct-answer reference; its times are not compared | — |
 
@@ -141,7 +137,7 @@ Aurora PostgreSQL 17.11+ / 18.6+에는 `aurora_analytics` 확장이 들어 있�
 | C | Aurora Serverless v2, 0.5–8 ACU | 가변 |
 | D | Aurora db.r8g.large(EBS) | 16 GiB |
 | E (선택) | Aurora db.r8gd.xlarge(NVMe) — 서울에서 `db.r8gd.large`는 주문 불가 | 32 GiB |
-| P | PostgreSQL 18 앞단 ClickHouse Managed Postgres r6gd.large(2 vCPU · 16 GiB: vCPU는 db.t4g.large와 같고 메모리는 두 배 — 크기 변경 API가 m6gd.large를 받고도 적용하지 않음, 2026-10-09) + pg_clickhouse → ClickHouse Cloud 레플리카당 8 GiB, 데이터는 MergeTree | 16 + 8 × 2 GiB |
+| P | PostgreSQL 18 앞단 ClickHouse Managed Postgres, 2 vCPU(2026-10-09 실행 중 r6gd.large 16 GiB 또는 m6gd.large 8 GiB — RESULTS.md 참고) + pg_clickhouse → ClickHouse Cloud 레플리카당 8 GiB, 데이터는 MergeTree | 16 + 8 × 2 GiB |
 | P-s3 (선택) | 같은 앞단 → 같은 Parquet 위의 ClickHouse S3 엔진 테이블 | 같음 |
 | R | 생성 머신의 DuckDB 1.5.6, 로컬 데이터베이스 파일 — 정답 기준이며 시간은 비교하지 않음 | — |
 

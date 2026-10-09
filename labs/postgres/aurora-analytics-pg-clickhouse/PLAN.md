@@ -59,7 +59,7 @@
 | C | Serverless v2, 0.5–8 ACU | 가변 | 공개 사례가 있는 기준 |
 | D | db.r8g.large(EBS 전용) | 16 GiB | 비버스터블 기준 |
 | E (선택) | db.r8gd.xlarge(NVMe) | 32 GiB | 권장 계열 기준 — r8gd.large는 서울에서 주문 불가(2026-10-09). 크기가 다르므로 비교 시 명시 |
-| P | ClickHouse Managed Postgres 18, r6gd.large(2 vCPU · 16 GiB — vCPU는 B와 같고 메모리 두 배. m6gd.large로 맞추려 했으나 PATCH가 200을 주고 적용하지 않아 그대로 진행, 소유자 결정 2026-10-09) + pg_clickhouse → ClickHouse Cloud(레플리카당 8 GiB 고정, 레플리카 2) | 16 GiB + 8 GiB×2 | 비슷한 크기의 다른 경로. 데이터는 같은 Parquet를 MergeTree로 적재(적재 시간·비용 포함) |
+| P | ClickHouse Managed Postgres 18, m6gd.large(2 vCPU · 8 GiB)로 변경 요청. 2026-10-09 실행에서는 변경이 늦게 적용돼 실행 중 크기가 r6gd.large(16 GiB)인지 m6gd.large인지 모름 — RESULTS.md + pg_clickhouse → ClickHouse Cloud(레플리카당 8 GiB 고정, 레플리카 2) | 16 GiB + 8 GiB×2 | 비슷한 크기의 다른 경로. 데이터는 같은 Parquet를 MergeTree로 적재(적재 시간·비용 포함) |
 | P-s3 (선택) | P와 같은 앞단 → ClickHouse S3 엔진 테이블(같은 Parquet를 그 자리에서 읽음) | 〃 | 적재 없이 같은 파일을 읽는 경우 |
 | R | 생성 머신의 DuckDB(로컬 파일) | — | 결과 정답·참고 시간 |
 
