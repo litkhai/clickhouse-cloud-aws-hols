@@ -38,13 +38,9 @@ variable "allowed_cidr_blocks" {
 }
 
 variable "key_name" {
-  description = "Name of an existing EC2 key pair in aws_region, used for SSH to both instances"
+  description = "Existing EC2 key pair for SSH. Empty = no key pair; reach the instances with SSM Session Manager / send-command (the instance profile carries AmazonSSMManagedInstanceCore)"
   type        = string
-
-  validation {
-    condition     = length(var.key_name) > 0
-    error_message = "key_name must not be empty."
-  }
+  default     = ""
 }
 
 # ---------------------------------------------------------------- Aurora
@@ -83,8 +79,8 @@ variable "aurora_instance_class" {
   default     = "db.t4g.large"
 
   validation {
-    condition     = contains(["db.t4g.medium", "db.t4g.large", "db.serverless", "db.r8g.large", "db.r8gd.large"], var.aurora_instance_class)
-    error_message = "aurora_instance_class must be one of db.t4g.medium, db.t4g.large, db.serverless, db.r8g.large, db.r8gd.large."
+    condition     = contains(["db.t4g.medium", "db.t4g.large", "db.serverless", "db.r8g.large", "db.r8gd.xlarge"], var.aurora_instance_class)
+    error_message = "aurora_instance_class must be one of db.t4g.medium, db.t4g.large, db.serverless, db.r8g.large, db.r8gd.xlarge."
   }
 }
 
@@ -138,9 +134,9 @@ variable "generator_disk_gb" {
 }
 
 variable "create_pgfront" {
-  description = "Create the PostgreSQL front end EC2 running pg_clickhouse"
+  description = "Create the PostgreSQL front end EC2 running pg_clickhouse. Off by default: the run uses a ClickHouse Managed Postgres service as the front end (owner's choice, 2026-10-09); this EC2 is the self-managed alternative"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "pgfront_instance_type" {
