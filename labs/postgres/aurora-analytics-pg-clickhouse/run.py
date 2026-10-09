@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the TPC-DS query set against one target and append the results to out/<target>/sf<N>-<phase>.csv.
 
-    uv run --with 'psycopg[binary]' --with duckdb==1.5.6 run.py \
+    uv run --python 3.12 --with 'psycopg[binary]' --with duckdb==1.5.6 run.py \
         --target A|B|C|D|E|P|P-s3|R --sf N --phase correctness|scale \
         [--queries query01,14_1 ...] [--warm 3] [--timeout 600] \
         [--cold clear-cache|reboot|none] [--r-db PATH] [--pause 5] [--resume]
