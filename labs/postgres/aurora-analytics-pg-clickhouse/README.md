@@ -1,0 +1,253 @@
+# Aurora PostgreSQL `aurora_analytics` on db.t4g — and pg_clickhouse at a similar size
+
+> **Run on 2026-10-09, partly** (deploy → run → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
+> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): targets A, B and P at SF1 and SF10.
+> Results: [RESULTS.md](RESULTS.md) (measurements), [COMPARISON.md](COMPARISON.md) (comparison with interpretation). Not run: SF100, C, D, E, P-s3, interference, the tuned run — tracked in
+> [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43). Changed after that run without a re-run:
+> none.
+>
+> **2026-10-09 일부 실행** (deploy → 실행 → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
+> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): A·B·P를 SF1·SF10으로. 결과는
+> [RESULTS.md](RESULTS.md)(측정 기록), [COMPARISON.md](COMPARISON.md)(해석을 담은 비교). 실행 안 함: SF100, C·D·E, P-s3, 간섭, 조정 실행 —
+> [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43)에서 추적. 그 실행 뒤 재실행 없이 바뀐 것: 없음.
+
+[English](#english) | [한국어](#한국어)
+
+## English
+
+Aurora PostgreSQL 17.11+ / 18.6+ ships the `aurora_analytics` extension: an embedded DuckDB engine
+that reads Parquet and Iceberg in S3 through read-only foreign tables. AWS documents engine
+versions but **no list of instance classes** (read 2026-10-09). This lab answers, with
+TPC-DS-derived data and the same query text everywhere:
+
+1. Does it work on the burstable **db.t4g.medium / db.t4g.large**, and how far does it go — correctness
+   against a local DuckDB, SF100 completion, out-of-memory / spill / timeout, CPU credits, and the effect
+   on OLTP latency on the same instance?
+2. What do the same queries do when a PostgreSQL front end of a similar size sends them through
+   **pg_clickhouse** to a **ClickHouse Cloud** service of a similar size?
+
+The test plan — questions, targets, rules, report template — is [PLAN.md](PLAN.md) (Korean).
+
+### Targets
+
+| ID | What | Memory |
+|---|---|---|
+| A | Aurora db.t4g.medium + `aurora_analytics` | 4 GiB |
+| B | Aurora db.t4g.large + `aurora_analytics` | 8 GiB |
+| C | Aurora Serverless v2, 0.5–8 ACU | variable |
+| D | Aurora db.r8g.large (EBS) | 16 GiB |
+| E (optional) | Aurora db.r8gd.xlarge (NVMe) — `db.r8gd.large` is not orderable in ap-northeast-2 | 32 GiB |
+| P | PostgreSQL 18 front end, ClickHouse Managed Postgres, 2 vCPU (r6gd.large 16 GiB or m6gd.large 8 GiB during the 2026-10-09 run — see RESULTS.md) + pg_clickhouse → ClickHouse Cloud, 8 GiB per replica, data in MergeTree | 16 + 8 × 2 GiB |
+| P-s3 (optional) | the same front end → ClickHouse S3-engine tables over the same Parquet files | same |
+| R | DuckDB 1.5.6 on the generator, over its local database file — the correct-answer reference; its times are not compared | — |
+
+Same Parquet files, same 103 queries ([tpcds-scripts](https://github.com/litkhai/tpcds-scripts)
+`engines/duckdb/queries`, pinned by commit; 101 are byte-identical to its PostgreSQL dialect and two
+add an alias fix that is valid PostgreSQL), same order, 600 s timeout, concurrency 1.
+
+### Architecture
+
+```
+ generator EC2 (m7g.4xlarge, public subnet)          ClickHouse Cloud, ap-northeast-2
+   DuckDB dsdgen ─► S3 Parquet (SSE-S3) ◄──────────── s3() load into MergeTree (IAM role)
+   psql / pgbench / run.py                              ▲ TLS 9440 (pg_clickhouse, binary)
+        │ 5432 (private)          │ TLS 5432             │
+        ▼                         ▼                      │
+ Aurora PostgreSQL 18.6        Managed Postgres 18 ──────┘
+ (private subnets, one         (P front end)
+  instance, class = target)
+   aurora_analytics ─► S3 gateway endpoint ─► the same Parquet
+```
+
+Terraform creates the VPC (one public, two private subnets, S3 gateway endpoint, no NAT), the
+bucket, the IAM roles (Aurora `AuroraAnalytics` feature; an optional read role for ClickHouse Cloud),
+the cluster parameter group with `aurora_analytics.enabled = true`, the Aurora cluster with one
+instance, and the generator EC2. The ClickHouse Cloud services are not created by Terraform. A
+self-managed EC2 front end (t4g + the `ghcr.io/clickhouse/pg_clickhouse` image) is available with
+`create_pgfront = true`.
+
+### Run it
+
+Read [PLAN.md](PLAN.md) §8 (budget, safety) first. Every step writes its log under `out/` (gitignored).
+
+```bash
+cp terraform.tfvars.example terraform.tfvars    # owner, ttl, allowed_cidr_blocks
+./deploy.sh                                     # preflight (orderable?), apply, writes config.env
+./deploy.sh --class db.t4g.large                # next target: same cluster, new class
+```
+
+Then fill the `CH_*` and `PGFRONT_*` lines of `config.env`, copy the lab to the generator and run,
+in order (each stage only after the previous one passed):
+
+| Step | Script | Plan stage |
+|---|---|---|
+| Generate SF1 / SF100 to S3 (and R's database) | `01-generate.sh --sf N` | §4 |
+| Fetch the pinned query set | `02-queries.sh` | §5 stage 1 |
+| Extension, foreign tables, stage 0 checks | `10-aurora-setup.sh --sf N` | stage 0 (Q1) |
+| Load ClickHouse Cloud from the same files | `20-clickhouse-load.sh --sf N [--s3-tables]` | P |
+| pg_clickhouse server and foreign schema | `21-pgfront-setup.sh --sf N` | P |
+| Correctness, SF1 | `run.py --phase correctness`, `compare.py --sf 1` | stage 1 (Q2) |
+| Scale, SF100 | `run.py --phase scale` | stage 2 (Q3, Q4, Q6) |
+
+`run.py` and `compare.py` run as `uv run --python 3.12 --with 'psycopg[binary]' --with duckdb==1.5.6 run.py …`:
+Amazon Linux 2023 ships Python 3.9 and `duckdb` 1.5.6 needs 3.10 or later.
+
+Interference (stage 3), the CloudWatch export and the §9 report are listed in
+[#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43).
+
+```bash
+./destroy.sh        # asks you to type the bucket name: the Parquet data goes with it
+```
+
+Put ClickHouse Cloud services back to their recorded sizes afterwards.
+
+### Glue catalog and Iceberg (optional)
+
+**Not run yet** (written 2026-10-09, checked only with `terraform validate`, `bash -n` and a local type-mapping check).
+The same TPC-DS data as Iceberg tables in the AWS Glue Data Catalog, read by `aurora_analytics`
+(`IMPORT FOREIGN SCHEMA`, catalog ARN) and by ClickHouse Cloud. Docs read 2026-10-09: Aurora User Guide "Working with
+foreign tables"; Athena User Guide "CREATE TABLE AS" (Iceberg CTAS properties); ClickHouse "AWS Glue catalog"
+(`DataLakeCatalog`, `allow_database_glue_catalog`, `aws_role_arn` from v26.2) and "Iceberg table engine"
+(`IcebergS3`, `extra_credentials`). The ClickHouse Glue catalog integration is Beta; it is only a count smoke check here,
+the 103 queries go through `IcebergS3` tables.
+
+1. `enable_glue = true` in `terraform.tfvars`, then `./deploy.sh` (Glue databases, Glue interface endpoint, Athena
+   workgroup, IAM; only IAM policy documents change in place; `config.env` gets `GLUE_*` and `ATHENA_WORKGROUP`).
+2. `./30-iceberg.sh --sf N`: Parquet schema (DuckDB) → Athena external tables → CTAS to Iceberg → counts
+   (`out/iceberg-sf<N>.csv`). `--drop` removes both sets.
+3. `./11-aurora-glue.sh --sf N`: schema `ice_sf<N>` with the plain table names on Aurora.
+4. `./22-clickhouse-iceberg.sh --sf N`: Glue catalog smoke check (`out/P/glue-catalog-sf<N>.csv`) and database
+   `ice_sf<N>` with `IcebergS3` tables.
+5. `./21-pgfront-setup.sh --sf N --db ice_sf<N>`: the pg_clickhouse server `ch_ice_sf<N>` and schema `ice_sf<N>`.
+6. `run.py --target B|P --sf N --phase correctness --schema ice_sf<N> --tag ice` (`out/<target>/sf<N>-<phase>-ice.csv`;
+   `compare.py --sf N --tag ice`).
+
+### Rehearse locally
+
+`local/rehearse.sh --sf 1` runs paths P and R at SF1 with Docker only (PostgreSQL 18 +
+pg_clickhouse 0.11.0, ClickHouse server, DuckDB) and compares answers. No timings: a laptop says
+nothing about t4g.
+
+### Not part of this lab
+
+An official TPC result. Figures from this lab are derived from TPC-DS and are not comparable to
+published TPC-DS results.
+
+---
+
+## 한국어
+
+Aurora PostgreSQL 17.11+ / 18.6+에는 `aurora_analytics` 확장이 들어 있습니다. S3의 Parquet·Iceberg를
+읽기 전용 외래 테이블로 읽는 내장 DuckDB 엔진입니다. AWS 문서는 엔진 버전만 적고 **인스턴스 클래스
+목록은 없습니다**(2026-10-09 확인). 이 실습은 TPC-DS 파생 데이터와 모든 대상에 같은 질의 문구로
+다음을 확인합니다.
+
+1. 버스터블 **db.t4g.medium·db.t4g.large**에서 동작하는가, 어디까지 쓸 만한가 — 로컬 DuckDB 대비
+   정확성, SF100 완료율, 메모리 부족·넘침·시간 초과, CPU 크레딧, 같은 인스턴스의 OLTP 지연 영향.
+2. 비슷한 크기의 PostgreSQL 앞단이 같은 질의를 **pg_clickhouse**로 비슷한 크기의 **ClickHouse Cloud**에
+   보내면 어떻게 되는가.
+
+질문·대상·규칙·결과 양식은 [PLAN.md](PLAN.md)에 있습니다.
+
+### 대상
+
+| ID | 내용 | 메모리 |
+|---|---|---|
+| A | Aurora db.t4g.medium + `aurora_analytics` | 4 GiB |
+| B | Aurora db.t4g.large + `aurora_analytics` | 8 GiB |
+| C | Aurora Serverless v2, 0.5–8 ACU | 가변 |
+| D | Aurora db.r8g.large(EBS) | 16 GiB |
+| E (선택) | Aurora db.r8gd.xlarge(NVMe) — 서울에서 `db.r8gd.large`는 주문 불가 | 32 GiB |
+| P | PostgreSQL 18 앞단 ClickHouse Managed Postgres, 2 vCPU(2026-10-09 실행 중 r6gd.large 16 GiB 또는 m6gd.large 8 GiB — RESULTS.md 참고) + pg_clickhouse → ClickHouse Cloud 레플리카당 8 GiB, 데이터는 MergeTree | 16 + 8 × 2 GiB |
+| P-s3 (선택) | 같은 앞단 → 같은 Parquet 위의 ClickHouse S3 엔진 테이블 | 같음 |
+| R | 생성 머신의 DuckDB 1.5.6, 로컬 데이터베이스 파일 — 정답 기준이며 시간은 비교하지 않음 | — |
+
+같은 Parquet 파일, 같은 질의 103개([tpcds-scripts](https://github.com/litkhai/tpcds-scripts)
+`engines/duckdb/queries`, 커밋 고정. 101개는 그 저장소의 PostgreSQL 방언과 글자까지 같고 두 개는
+PostgreSQL에서도 유효한 별칭 수정), 같은 순서, 600초 제한, 동시성 1.
+
+### 구성
+
+```
+ 생성 EC2 (m7g.4xlarge, 퍼블릭 서브넷)                ClickHouse Cloud, ap-northeast-2
+   DuckDB dsdgen ─► S3 Parquet (SSE-S3) ◄──────────── s3()로 MergeTree 적재 (IAM 역할)
+   psql / pgbench / run.py                              ▲ TLS 9440 (pg_clickhouse, binary)
+        │ 5432 (프라이빗)          │ TLS 5432            │
+        ▼                         ▼                      │
+ Aurora PostgreSQL 18.6        Managed Postgres 18 ──────┘
+ (프라이빗 서브넷, 인스턴스     (P 앞단)
+  하나, 클래스 = 대상)
+   aurora_analytics ─► S3 게이트웨이 엔드포인트 ─► 같은 Parquet
+```
+
+Terraform은 VPC(퍼블릭 1·프라이빗 2 서브넷, S3 게이트웨이 엔드포인트, NAT 없음), 버킷, IAM 역할(Aurora
+`AuroraAnalytics` 기능, ClickHouse Cloud용 읽기 역할은 선택), `aurora_analytics.enabled = true`인 클러스터
+파라미터 그룹, 인스턴스 하나짜리 Aurora 클러스터, 생성 EC2를 만듭니다. ClickHouse Cloud 서비스는
+Terraform이 만들지 않습니다. `create_pgfront = true`면 직접 운영하는 EC2 앞단(t4g +
+`ghcr.io/clickhouse/pg_clickhouse` 이미지)을 쓸 수 있습니다.
+
+### 실행
+
+먼저 [PLAN.md](PLAN.md) §8(예산·안전)을 읽으세요. 모든 단계의 로그는 `out/`(git 제외)에 남습니다.
+
+```bash
+cp terraform.tfvars.example terraform.tfvars    # owner, ttl, allowed_cidr_blocks
+./deploy.sh                                     # 사전 확인(주문 가능?), apply, config.env 작성
+./deploy.sh --class db.t4g.large                # 다음 대상: 같은 클러스터, 클래스만 바꿈
+```
+
+그다음 `config.env`의 `CH_*`·`PGFRONT_*` 줄을 채우고 실습을 생성 머신에 복사해 순서대로 실행합니다
+(앞 단계를 통과해야 다음 단계).
+
+| 단계 | 스크립트 | 계획 단계 |
+|---|---|---|
+| SF1·SF100 생성 → S3(R의 데이터베이스 포함) | `01-generate.sh --sf N` | §4 |
+| 고정된 질의 세트 받기 | `02-queries.sh` | §5 단계 1 |
+| 확장, 외래 테이블, 단계 0 확인 | `10-aurora-setup.sh --sf N` | 단계 0 (Q1) |
+| 같은 파일로 ClickHouse Cloud 적재 | `20-clickhouse-load.sh --sf N [--s3-tables]` | P |
+| pg_clickhouse 서버와 외래 스키마 | `21-pgfront-setup.sh --sf N` | P |
+| 정확성, SF1 | `run.py --phase correctness`, `compare.py --sf 1` | 단계 1 (Q2) |
+| 규모, SF100 | `run.py --phase scale` | 단계 2 (Q3, Q4, Q6) |
+
+`run.py`·`compare.py`는 `uv run --python 3.12 --with 'psycopg[binary]' --with duckdb==1.5.6 run.py …`로 실행합니다.
+Amazon Linux 2023의 Python은 3.9이고 `duckdb` 1.5.6은 3.10 이상이 필요합니다.
+
+간섭(단계 3), CloudWatch 내보내기, §9 결과 문서는
+[#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43)에 적혀 있습니다.
+
+```bash
+./destroy.sh        # 버킷 이름을 입력해야 진행: Parquet 데이터도 함께 지워짐
+```
+
+끝나면 ClickHouse Cloud 서비스를 기록해 둔 원래 크기로 되돌리세요.
+
+### Glue 카탈로그와 Iceberg (선택)
+
+**아직 실행하지 않음** (2026-10-09 작성, `terraform validate`·`bash -n`·로컬 타입 매핑 확인만 함).
+같은 TPC-DS 데이터를 AWS Glue Data Catalog의 Iceberg 테이블로 두고 `aurora_analytics`(`IMPORT FOREIGN SCHEMA`,
+카탈로그 ARN)와 ClickHouse Cloud가 읽습니다. 2026-10-09에 읽은 문서: Aurora User Guide "Working with foreign
+tables", Athena User Guide "CREATE TABLE AS"(Iceberg CTAS 속성), ClickHouse "AWS Glue catalog"(`DataLakeCatalog`,
+`allow_database_glue_catalog`, `aws_role_arn`은 v26.2부터)와 "Iceberg table engine"(`IcebergS3`, `extra_credentials`).
+ClickHouse의 Glue 카탈로그 연동은 Beta라서 여기서는 건수 확인(smoke check)에만 쓰고, 103개 쿼리는 `IcebergS3` 테이블로
+돌립니다.
+
+1. `terraform.tfvars`에 `enable_glue = true`, 이어서 `./deploy.sh` (Glue 데이터베이스, Glue 인터페이스 엔드포인트,
+   Athena 워크그룹, IAM. 기존 리소스는 IAM 정책 문서만 제자리 변경. `config.env`에 `GLUE_*`, `ATHENA_WORKGROUP` 추가).
+2. `./30-iceberg.sh --sf N`: Parquet 스키마(DuckDB) → Athena 외부 테이블 → CTAS로 Iceberg → 건수
+   (`out/iceberg-sf<N>.csv`). `--drop`은 두 세트를 모두 지웁니다.
+3. `./11-aurora-glue.sh --sf N`: Aurora에 스키마 `ice_sf<N>`, 테이블 이름은 접미사 없이.
+4. `./22-clickhouse-iceberg.sh --sf N`: Glue 카탈로그 smoke check(`out/P/glue-catalog-sf<N>.csv`)와 `IcebergS3` 테이블로
+   데이터베이스 `ice_sf<N>`.
+5. `./21-pgfront-setup.sh --sf N --db ice_sf<N>`: pg_clickhouse 서버 `ch_ice_sf<N>`와 스키마 `ice_sf<N>`.
+6. `run.py --target B|P --sf N --phase correctness --schema ice_sf<N> --tag ice`
+   (`out/<target>/sf<N>-<phase>-ice.csv`, `compare.py --sf N --tag ice`).
+
+### 로컬 리허설
+
+`local/rehearse.sh --sf 1`은 Docker만으로(PostgreSQL 18 + pg_clickhouse 0.11.0, ClickHouse 서버,
+DuckDB) P와 R 경로를 SF1로 돌리고 답을 비교합니다. 시간은 재지 않습니다. 노트북 수치는 t4g에 대해
+아무것도 말해 주지 않습니다.
+
+### 이 실습이 아닌 것
+
+공식 TPC 결과. 이 실습의 수치는 TPC-DS에서 파생했으며 공표된 TPC-DS 결과와 비교할 수 없습니다.
