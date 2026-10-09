@@ -1,15 +1,23 @@
 # Aurora PostgreSQL `aurora_analytics` on db.t4g — and pg_clickhouse at a similar size
 
 > **Run on 2026-10-09, partly** (deploy → run → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
-> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): targets A, B and P at SF1 and SF10.
-> Results: [RESULTS.md](RESULTS.md) (measurements), [COMPARISON.md](COMPARISON.md) (comparison with interpretation). Not run: SF100, C, D, E, P-s3, interference, the tuned run — tracked in
+> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10), three runs (`destroy.sh` after run 1 and
+> after run 3): SF1 and SF10 with A, B and P; SF100 with B, E (db.r8gd.2xlarge) and P; SF10 as Iceberg tables in the
+> AWS Glue Data Catalog with B, E and P.
+> Results: [RESULTS.md](RESULTS.md) (measurements), [COMPARISON.md](COMPARISON.md) (comparison with interpretation). Not run: C, D, A at SF100, E at SF1, P-s3, interference, the tuned run;
+> B at SF100 stopped at its 3-hour cap after 75 of 103 queries — tracked in
 > [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43). Changed after that run without a re-run:
-> none.
+> `_lib.sh` pins the query set to `b107f50`, the merge commit of litkhai/tpcds-scripts#11, instead of `1e4870cc`,
+> which ran; `engines/` is identical in the two (empty `git diff` when the pin changed).
 >
 > **2026-10-09 일부 실행** (deploy → 실행 → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
-> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): A·B·P를 SF1·SF10으로. 결과는
-> [RESULTS.md](RESULTS.md)(측정 기록), [COMPARISON.md](COMPARISON.md)(해석을 담은 비교). 실행 안 함: SF100, C·D·E, P-s3, 간섭, 조정 실행 —
-> [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43)에서 추적. 그 실행 뒤 재실행 없이 바뀐 것: 없음.
+> `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10), 세 번 실행(실행 1 뒤와 실행 3 뒤에
+> `destroy.sh`): SF1·SF10에 A·B·P, SF100에 B·E(db.r8gd.2xlarge)·P, AWS Glue Data Catalog의 Iceberg 테이블로 SF10에 B·E·P.
+> 결과는 [RESULTS.md](RESULTS.md)(측정 기록), [COMPARISON.md](COMPARISON.md)(해석을 담은 비교). 실행 안 함: C·D, SF100의 A, SF1의 E, P-s3, 간섭, 조정 실행.
+> SF100의 B는 3시간 상한에 걸려 103개 중 75개에서 멈춤 —
+> [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43)에서 추적. 그 실행 뒤 재실행 없이 바뀐 것:
+> `_lib.sh`가 쿼리 세트를 실행에 쓴 `1e4870cc` 대신 litkhai/tpcds-scripts#11의 머지 커밋 `b107f50`에 고정.
+> 두 커밋의 `engines/`는 같음(고정을 바꿀 때 `git diff`가 비어 있었음).
 
 [English](#english) | [한국어](#한국어)
 
@@ -103,7 +111,8 @@ Put ClickHouse Cloud services back to their recorded sizes afterwards.
 
 ### Glue catalog and Iceberg (optional)
 
-**Not run yet** (written 2026-10-09, checked only with `terraform validate`, `bash -n` and a local type-mapping check).
+**Run once on 2026-10-09**: SF10 with B, E and P (run 3 in [RESULTS.md](RESULTS.md)). Written the same day; before
+that run it was checked only with `terraform validate`, `bash -n` and a local type-mapping check.
 The same TPC-DS data as Iceberg tables in the AWS Glue Data Catalog, read by `aurora_analytics`
 (`IMPORT FOREIGN SCHEMA`, catalog ARN) and by ClickHouse Cloud. Docs read 2026-10-09: Aurora User Guide "Working with
 foreign tables"; Athena User Guide "CREATE TABLE AS" (Iceberg CTAS properties); ClickHouse "AWS Glue catalog"
@@ -119,7 +128,7 @@ the 103 queries go through `IcebergS3` tables.
 4. `./22-clickhouse-iceberg.sh --sf N`: Glue catalog smoke check (`out/P/glue-catalog-sf<N>.csv`) and database
    `ice_sf<N>` with `IcebergS3` tables.
 5. `./21-pgfront-setup.sh --sf N --db ice_sf<N>`: the pg_clickhouse server `ch_ice_sf<N>` and schema `ice_sf<N>`.
-6. `run.py --target B|P --sf N --phase correctness --schema ice_sf<N> --tag ice` (`out/<target>/sf<N>-<phase>-ice.csv`;
+6. `run.py --target B|E|P --sf N --phase correctness --schema ice_sf<N> --tag ice` (`out/<target>/sf<N>-<phase>-ice.csv`;
    `compare.py --sf N --tag ice`).
 
 ### Rehearse locally
@@ -223,7 +232,8 @@ Amazon Linux 2023의 Python은 3.9이고 `duckdb` 1.5.6은 3.10 이상이 필요
 
 ### Glue 카탈로그와 Iceberg (선택)
 
-**아직 실행하지 않음** (2026-10-09 작성, `terraform validate`·`bash -n`·로컬 타입 매핑 확인만 함).
+**2026-10-09에 한 번 실행**: SF10에 B·E·P([RESULTS.md](RESULTS.md)의 실행 3). 같은 날 작성했고, 그 실행 전에는
+`terraform validate`·`bash -n`·로컬 타입 매핑 확인만 함.
 같은 TPC-DS 데이터를 AWS Glue Data Catalog의 Iceberg 테이블로 두고 `aurora_analytics`(`IMPORT FOREIGN SCHEMA`,
 카탈로그 ARN)와 ClickHouse Cloud가 읽습니다. 2026-10-09에 읽은 문서: Aurora User Guide "Working with foreign
 tables", Athena User Guide "CREATE TABLE AS"(Iceberg CTAS 속성), ClickHouse "AWS Glue catalog"(`DataLakeCatalog`,
@@ -239,7 +249,7 @@ ClickHouse의 Glue 카탈로그 연동은 Beta라서 여기서는 건수 확인(
 4. `./22-clickhouse-iceberg.sh --sf N`: Glue 카탈로그 smoke check(`out/P/glue-catalog-sf<N>.csv`)와 `IcebergS3` 테이블로
    데이터베이스 `ice_sf<N>`.
 5. `./21-pgfront-setup.sh --sf N --db ice_sf<N>`: pg_clickhouse 서버 `ch_ice_sf<N>`와 스키마 `ice_sf<N>`.
-6. `run.py --target B|P --sf N --phase correctness --schema ice_sf<N> --tag ice`
+6. `run.py --target B|E|P --sf N --phase correctness --schema ice_sf<N> --tag ice`
    (`out/<target>/sf<N>-<phase>-ice.csv`, `compare.py --sf N --tag ice`).
 
 ### 로컬 리허설
