@@ -2,13 +2,13 @@
 
 > **Run on 2026-10-09, partly** (deploy → run → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
 > `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): targets A, B and P at SF1 and SF10.
-> Results: [RESULTS.md](RESULTS.md). Not run: SF100, C, D, E, P-s3, interference, the tuned run — tracked in
+> Results: [RESULTS.md](RESULTS.md) (measurements), [COMPARISON.md](COMPARISON.md) (comparison with interpretation). Not run: SF100, C, D, E, P-s3, interference, the tuned run — tracked in
 > [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43). Changed after that run without a re-run:
 > none.
 >
 > **2026-10-09 일부 실행** (deploy → 실행 → `destroy.sh`, AWS provider 5.100.0, Aurora PostgreSQL 18.6,
 > `aurora_analytics` 1.0.0, ClickHouse Cloud 26.6.1, pg_clickhouse 0.10): A·B·P를 SF1·SF10으로. 결과는
-> [RESULTS.md](RESULTS.md). 실행 안 함: SF100, C·D·E, P-s3, 간섭, 조정 실행 —
+> [RESULTS.md](RESULTS.md)(측정 기록), [COMPARISON.md](COMPARISON.md)(해석을 담은 비교). 실행 안 함: SF100, C·D·E, P-s3, 간섭, 조정 실행 —
 > [#43](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/43)에서 추적. 그 실행 뒤 재실행 없이 바뀐 것: 없음.
 
 [English](#english) | [한국어](#한국어)
