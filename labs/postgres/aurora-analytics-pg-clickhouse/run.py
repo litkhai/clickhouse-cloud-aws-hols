@@ -145,6 +145,10 @@ def summarize(rows):
 
 
 # ---------------------------------------------------------------------------------------------------
+class WatchdogTimeout(Exception):
+    """The query outlived --timeout and was ended with pg_terminate_backend()."""
+
+
 def classify(exc):
     """-> (status, message)"""
     msg = " ".join(str(exc).split())
@@ -158,7 +162,7 @@ def classify(exc):
     if (state == "53100" or "no space left" in low or ("spill" in low and ("space" in low or "disk" in low))
             or "out of disk" in low or (kind == "IOException" and "disk" in low)):
         return "spill", msg
-    if state == "57014" or kind == "InterruptException":
+    if state == "57014" or kind in ("InterruptException", "WatchdogTimeout"):
         return "timeout", msg
     if state.startswith("42") or kind in ("ParserException", "BinderException", "CatalogException"):
         return "syntax", msg
@@ -290,10 +294,36 @@ class PgTarget(Target):
             return None
 
     def execute(self, sql):
+        # Watchdog: on Aurora aurora_analytics 1.0.0 (18.6, 2026-10-09) neither statement_timeout nor
+        # pg_cancel_backend() stops a running foreign-table query, and it keeps running after the client
+        # goes away; pg_terminate_backend() does stop it. So --timeout is enforced from a second connection.
         self.ensure()
-        with self.conn.cursor() as cur:
-            cur.execute(sql)
-            return cur.fetchall()
+        pid = self.conn.info.backend_pid
+        fired = threading.Event()
+
+        def terminate():
+            fired.set()
+            try:
+                with self.psycopg.connect(password=self.password, connect_timeout=30, autocommit=True,
+                                          **self.params) as c2:
+                    c2.execute("SELECT pg_terminate_backend(%s)", (pid,))
+            except Exception as e:  # noqa: BLE001
+                print("watchdog: pg_terminate_backend(%d) failed: %s" % (pid, e), file=sys.stderr, flush=True)
+
+        timer = threading.Timer(self.args.timeout + 2, terminate)
+        timer.daemon = True
+        timer.start()
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(sql)
+                return cur.fetchall()
+        except Exception as e:
+            if fired.is_set():
+                raise WatchdogTimeout("terminated by the watchdog (pg_terminate_backend) after %ds; "
+                                      "statement_timeout did not stop it: %s" % (self.args.timeout, e)) from e
+            raise
+        finally:
+            timer.cancel()
 
     def explain(self, sql):
         if self.args.target not in ("P", "P-s3"):
