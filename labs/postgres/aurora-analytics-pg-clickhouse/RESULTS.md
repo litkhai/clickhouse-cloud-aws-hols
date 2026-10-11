@@ -123,7 +123,7 @@ Targets B (db.t4g.large), E (db.r8gd.2xlarge), P (ClickHouse Cloud 32 GiB per re
 ### Cleanup and cost
 
 Run 1 was destroyed at about 05:50 UTC (40 resources), runs 2 and 3 at about 13:43 UTC (46 resources, incl. the Glue databases, Athena workgroup and Glue endpoint; the reader instances were deleted first). Checked afterwards: no cluster, instance, bucket, Glue database or VPC endpoint left. ClickHouse Cloud: the lab databases were dropped and the service sizes requested back (8–120 GiB per replica; front end r6gd.large); pg_clickhouse on the front end stays at 0.10.
-Cost: Cost Explorer by tag `purpose=aurora-analytics-t4g-test`, to be read on 2026-10-10.
+Cost: the actual AWS cost was not read — the owner has no Cost Explorer access (2026-10-11). The hourly list prices above are the only cost figures.
 
 ---
 
@@ -247,4 +247,4 @@ Iceberg 테이블로 CTAS(`table_type='ICEBERG'`, Parquet, ZSTD), `SELECT *`, �
 ### 정리와 비용
 
 실행 1은 05:50 UTC경(40개), 실행 2·3은 13:43 UTC경(46개, Glue 데이터베이스·Athena 작업 그룹·Glue 엔드포인트 포함, 리더 인스턴스는 먼저 삭제) 삭제. 이후 확인: 클러스터·인스턴스·버킷·Glue 데이터베이스·VPC 엔드포인트 없음. ClickHouse Cloud: 실습 데이터베이스 삭제, 서비스 크기 원복 요청(레플리카당 8–120 GiB, 앞단 r6gd.large). 앞단의 pg_clickhouse는 0.10 그대로.
-비용: 태그 `purpose=aurora-analytics-t4g-test`의 Cost Explorer, 2026-10-10에 확인 예정.
+비용: 실제 AWS 비용은 읽지 않음 — 소유자 계정에 Cost Explorer 접근 권한이 없음(2026-10-11). 비용 수치는 위의 시간당 정가뿐.
