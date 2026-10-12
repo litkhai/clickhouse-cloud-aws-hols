@@ -1,10 +1,10 @@
 # Masking sensitive rows while loading from S3 — ClickPipes (Terraform), load-then-UPDATE, or INSERT … SELECT
 
 > **Last run: 2026-10-12** — `deploy.sh` → `destroy.sh` end to end on one ClickHouse Cloud service (AWS `ap-northeast-2`, 2 replicas, ClickHouse 26.6.1.2326), Terraform 1.16.4, provider `ClickHouse/clickhouse` 3.37.0. Source: the public Stack Overflow `users.parquet` in `eu-west-3` (1.36 GB, 22,484,235 rows), read without credentials. The IAM-role path for a private bucket (`iam_role_arn`) was not run.
-> No changes since.
+> Since then: `sql/40-json-fields.sql` (deleting fields inside a JSON string, literal data only) added and run on its own on the same service on 2026-10-12, 29 of 29 cases passing; it creates no pipe and is not part of `deploy.sh`.
 >
 > **마지막 실행: 2026-10-12** — ClickHouse Cloud 서비스 하나(AWS `ap-northeast-2`, replica 2개, ClickHouse 26.6.1.2326)에서 `deploy.sh` → `destroy.sh`를 끝까지 실행. Terraform 1.16.4, provider `ClickHouse/clickhouse` 3.37.0. 원본은 `eu-west-3`의 공개 Stack Overflow `users.parquet`(1.36 GB, 22,484,235행)를 자격 증명 없이 읽음. 비공개 버킷용 IAM role 경로(`iam_role_arn`)는 실행하지 않음.
-> 그 뒤 변경 없음.
+> 그 뒤: `sql/40-json-fields.sql`(JSON 문자열 안의 필드 삭제, 리터럴 데이터만)을 추가해 같은 서비스에서 2026-10-12 따로 실행, 29개 사례 모두 통과. 파이프를 만들지 않고 `deploy.sh`에 들어 있지 않음.
 
 [English](#english) | [한국어](#한국어)
 
@@ -87,6 +87,19 @@ The copy of the MV masks each block, so the staging table holds only masked rows
 
 The equivalent C is [`sql/20-c-insert-select.sql`](sql/20-c-insert-select.sql): the same `SELECT` with `INSERT INTO <target>` in front.
 
+### When the sensitive part is a field inside a JSON string
+
+Often the rule does not mask whole columns but deletes a few fields inside a JSON document stored as a string (a request body, an event payload), and there are hundreds of rules, one per endpoint. The answer above does not change — delete while loading, in the MV or the `INSERT … SELECT` — only the expression does. [`sql/40-json-fields.sql`](sql/40-json-fields.sql) checks each piece on literal data (29 cases, 2026-10-12):
+
+1. **Top-level keys.** ClickHouse has no function that removes a JSON key (`system.functions`, 26.6). Rebuild the object from `JSONExtractKeysAndValuesRaw` without the keys to drop, and return the original string when nothing is dropped. This removes the key whatever its value (also `null`) and also when written with spaces (`"key" : …`) — which a `LIKE '%"key":%'` condition would miss, so the condition is not needed.
+2. **Nested `class.field` paths.** Two SQL UDFs (`mask_lab_drop_keys`, `mask_lab_drop_paths`) do the same one level down; when the class holds an array of objects they work element by element. A deeper path and broken JSON are left as they are. A SQL UDF created on one replica showed up on both replicas at once (`system.functions`, `origin = SQLUserDefined`); its name is service-wide.
+3. **Hundreds of rules.** One row per `(service, ipath, class, field)` in a table, a `COMPLEX_KEY_HASHED` dictionary keyed by `(service, ipath)`, and `arrayZip(dictGetOrDefault(…classes…), dictGetOrDefault(…fields…))` per row: only rows with a rule change. For a one-off load a `map(ipath, [fields…])` literal inside the MV is simpler; a missing key returns an empty array, and changing a rule means changing the MV.
+4. **Check after every batch:** rows where a rule's path is still present — `JSONHas(out, class, field)`, and for arrays per element — and rows where `isValidJSON` is 0.
+
+The alternative, a `JSON(SKIP request.class.field, …)` column, never stores the skipped paths, but it applies to every row alike (no per-endpoint rule), it kept fields inside arrays of objects and inside a JSON document encoded as a string, and the column is no longer a `String`.
+
+Not run: these expressions inside an MV fed by ClickPipes (the copied MV calling a UDF or a dictionary), and their cost at scale.
+
 ### Pitfalls
 
 - **`NULL` in the rule means "not masked".** `if(cond, …)` follows `WHERE` semantics, so a row whose condition is `NULL` keeps its values — as it would be skipped by `UPDATE … WHERE`. If such rows must be masked, use `ifNull(<rule>, true)`. The lab source has no `NULL` in `LastAccessDate`.
@@ -107,6 +120,7 @@ The equivalent C is [`sql/20-c-insert-select.sql`](sql/20-c-insert-select.sql): 
 | `sql/00-schema.sql` | database, landing `Null` table, four targets, masking MV |
 | `sql/20-c-insert-select.sql` | C |
 | `sql/30…34-b-*.sql` | B: raw load, lightweight `UPDATE`, `ALTER TABLE … UPDATE`, residue checks, `APPLY PATCHES` |
+| `sql/40-json-fields.sql` | deleting fields inside a JSON string: top-level keys, `class.field` UDFs, rules through a dictionary, `JSON(SKIP …)`; runs on its own |
 | `sql/90-verify.sql` | per-table check (`--param_t=<table>`) |
 | `terraform/` | the ClickPipe; credentials as `TF_VAR_*` or `terraform.tfvars` (from `terraform.tfvars.example`) |
 
@@ -189,6 +203,19 @@ MV 복사본이 블록마다 마스킹하므로 스테이징 테이블에는 마
 
 같은 일을 C로 하면 [`sql/20-c-insert-select.sql`](sql/20-c-insert-select.sql)입니다: 같은 `SELECT` 앞에 `INSERT INTO <대상>`을 붙인 것입니다.
 
+### 민감한 부분이 JSON 문자열 안의 필드일 때
+
+규칙이 컬럼 전체를 마스킹하는 대신, 문자열로 저장된 JSON 문서(요청 본문, 이벤트 페이로드) 안의 필드 몇 개를 지우는 경우가 많습니다. 규칙은 엔드포인트마다 하나씩, 수백 개가 됩니다. 위의 답은 그대로입니다 — MV나 `INSERT … SELECT`에서 적재하면서 지웁니다. 바뀌는 것은 식뿐입니다. [`sql/40-json-fields.sql`](sql/40-json-fields.sql)이 리터럴 데이터로 하나씩 확인합니다(29개 사례, 2026-10-12).
+
+1. **최상위 키.** ClickHouse에는 JSON 키를 지우는 함수가 없습니다(`system.functions`, 26.6). `JSONExtractKeysAndValuesRaw`로 지울 키를 빼고 객체를 다시 조립하고, 지울 것이 없으면 원래 문자열을 그대로 돌려줍니다. 값이 무엇이든(`null`도) 키를 지우고, `"key" : …`처럼 공백이 있어도 지웁니다 — `LIKE '%"key":%'` 조건은 이런 경우를 놓치므로 조건이 필요 없습니다.
+2. **중첩 `클래스.필드` 경로.** SQL UDF 두 개(`mask_lab_drop_keys`, `mask_lab_drop_paths`)가 한 단계 아래에서 같은 일을 합니다. 클래스가 객체 배열이면 원소마다 지웁니다. 더 깊은 경로와 깨진 JSON은 그대로 남습니다. SQL UDF는 replica 하나에서 만들면 두 replica에 바로 보였습니다(`system.functions`, `origin = SQLUserDefined`). 이름은 서비스 전체 단위입니다.
+3. **규칙 수백 개.** `(service, ipath, class, field)`를 한 행씩 테이블에 두고, `(service, ipath)`를 키로 하는 `COMPLEX_KEY_HASHED` 딕셔너리를 만든 뒤, 행마다 `arrayZip(dictGetOrDefault(…classes…), dictGetOrDefault(…fields…))`로 찾습니다. 규칙이 있는 행만 바뀝니다. 일회성 적재라면 MV 안에 `map(ipath, [필드…])`를 직접 쓰는 편이 단순합니다. 없는 키는 빈 배열이 나오고, 규칙을 바꾸려면 MV를 바꿔야 합니다.
+4. **배치마다 확인:** 규칙의 경로가 남은 행 — `JSONHas(out, 클래스, 필드)`, 배열이면 원소마다 — 과 `isValidJSON`이 0인 행.
+
+대안인 `JSON(SKIP request.클래스.필드, …)` 컬럼은 건너뛴 경로를 아예 저장하지 않습니다. 다만 모든 행에 똑같이 적용되고(엔드포인트별 규칙 불가), 객체 배열 안의 필드와 문자열로 한 번 더 감싼 JSON 안의 필드는 남았으며, 컬럼이 더는 `String`이 아닙니다.
+
+실행하지 않은 것: ClickPipes가 채우는 MV 안에서 이 식들(복사된 MV가 UDF나 딕셔너리를 부르는 것), 그리고 대규모에서의 비용.
+
 ### 주의할 점
 
 - **규칙이 `NULL`이면 "마스킹 안 함"입니다.** `if(cond, …)`는 `WHERE`와 같은 의미라서, 조건이 `NULL`인 행은 값이 그대로 남습니다 — `UPDATE … WHERE`에서 건너뛰는 것과 같습니다. 그런 행도 마스킹해야 하면 `ifNull(<규칙>, true)`를 씁니다. 실습 원본의 `LastAccessDate`에는 `NULL`이 없습니다.
@@ -209,5 +236,6 @@ MV 복사본이 블록마다 마스킹하므로 스테이징 테이블에는 마
 | `sql/00-schema.sql` | 데이터베이스, 착지 `Null` 테이블, 대상 테이블 4개, 마스킹 MV |
 | `sql/20-c-insert-select.sql` | C |
 | `sql/30…34-b-*.sql` | B: 원본 적재, lightweight `UPDATE`, `ALTER TABLE … UPDATE`, 잔존 확인, `APPLY PATCHES` |
+| `sql/40-json-fields.sql` | JSON 문자열 안의 필드 삭제: 최상위 키, `클래스.필드` UDF, 딕셔너리를 거친 규칙, `JSON(SKIP …)`. 따로 실행 |
 | `sql/90-verify.sql` | 테이블별 확인(`--param_t=<table>`) |
 | `terraform/` | ClickPipe. 자격 증명은 `TF_VAR_*` 또는 `terraform.tfvars`(`terraform.tfvars.example`에서 복사) |
