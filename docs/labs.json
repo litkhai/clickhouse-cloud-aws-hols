@@ -1,6 +1,6 @@
 {
   "repo": "clickhouse-cloud-aws-hols",
-  "generated": "2026-10-08T13:07:38Z",
+  "generated": "2026-10-12T15:01:11Z",
   "labs": [
     {
       "path": "labs/billing/usage-cost",
@@ -42,6 +42,23 @@
       ],
       "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/lake/terraform-glue-s3-chc-integration/README.md#한국어",
       "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/lake/terraform-glue-s3-chc-integration/README.md#english"
+    },
+    {
+      "path": "labs/s3/masking-on-load",
+      "title_ko": "S3 적재 중 민감정보 지우기: ClickPipes + MV, 적재 후 UPDATE, INSERT … SELECT",
+      "summary_ko": "같은 Parquet 파일과 규칙으로 세 방식을 ClickHouse Cloud에서 돌려 결과·시간·원본이 남는 곳을 비교하고, JSON 문자열 안의 중첩 필드를 규칙 수백 개로 지우는 식을 확인하는 실습입니다.",
+      "title_en": "Removing sensitive data while loading from S3: ClickPipes + MV, load-then-UPDATE, INSERT … SELECT",
+      "summary_en": "Run three ways on the same Parquet file and rule in ClickHouse Cloud, compare results, time and where raw values remain, and check expressions that delete nested fields inside a JSON string with hundreds of rules.",
+      "category": "cloud",
+      "verified_on": "26.6.1.2326",
+      "tags": [
+        "clickpipes",
+        "ingestion",
+        "materialized-view",
+        "updates-deletes"
+      ],
+      "readme_ko": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/s3/masking-on-load/README.md#한국어",
+      "readme_en": "https://github.com/litkhai/clickhouse-cloud-aws-hols/blob/main/labs/s3/masking-on-load/README.md#english"
     },
     {
       "path": "labs/s3/terraform-chc-secures3-aws",
