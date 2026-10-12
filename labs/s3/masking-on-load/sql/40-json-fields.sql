@@ -59,24 +59,24 @@ FROM values('case_name String, req String, expected String',
     ('deeper',        '{"연락처정보":{"sub":{"연락처":"010"}}}',                                       '{"연락처정보":{"sub":{"연락처":"010"}}}'),
     ('invalid',       '{"연락처정보":{"연락처":"010"',                                                 '{"연락처정보":{"연락처":"010"'));
 
--- 3) Hundreds of rules: one row per (service, ipath, class, field), looked up per row through a dictionary.
+-- 3) Hundreds of rules: one row per (service, endpoint, class, field), looked up per row through a dictionary.
 --    (A map literal inside the MV works as well for a one-off load; changing it means changing the MV.)
-CREATE TABLE mask_lab_json.rules (service String, ipath String, class String, field String) ENGINE = MergeTree ORDER BY (service, ipath);
-INSERT INTO mask_lab_json.rules SELECT * FROM values('service String, ipath String, class String, field String',
+CREATE TABLE mask_lab_json.rules (service String, endpoint String, class String, field String) ENGINE = MergeTree ORDER BY (service, endpoint);
+INSERT INTO mask_lab_json.rules SELECT * FROM values('service String, endpoint String, class String, field String',
     ('svc-core', '/api/report/usage-history', '연락처정보', '연락처'),
     ('svc-core', '/api/report/usage-history', 'user',      'phone'),
     ('svc-core', '/api/user/profile',          'user',      'rrn'));
-CREATE DICTIONARY mask_lab_json.rules_dict (service String, ipath String, classes Array(String), fields Array(String))
-PRIMARY KEY service, ipath
-SOURCE(CLICKHOUSE(QUERY 'SELECT service, ipath, groupArray(class), groupArray(field) FROM mask_lab_json.rules GROUP BY service, ipath'))
+CREATE DICTIONARY mask_lab_json.rules_dict (service String, endpoint String, classes Array(String), fields Array(String))
+PRIMARY KEY service, endpoint
+SOURCE(CLICKHOUSE(QUERY 'SELECT service, endpoint, groupArray(class), groupArray(field) FROM mask_lab_json.rules GROUP BY service, endpoint'))
 LIFETIME(0)
 LAYOUT(COMPLEX_KEY_HASHED());
 
 INSERT INTO mask_lab_json.results
-WITH arrayZip(dictGetOrDefault('mask_lab_json.rules_dict', 'classes', (service, ipath), CAST([], 'Array(String)')),
-              dictGetOrDefault('mask_lab_json.rules_dict', 'fields',  (service, ipath), CAST([], 'Array(String)'))) AS paths
+WITH arrayZip(dictGetOrDefault('mask_lab_json.rules_dict', 'classes', (service, endpoint), CAST([], 'Array(String)')),
+              dictGetOrDefault('mask_lab_json.rules_dict', 'fields',  (service, endpoint), CAST([], 'Array(String)'))) AS paths
 SELECT '3-rules', case_name, if(empty(paths), req, mask_lab_drop_paths(req, paths)) = expected
-FROM values('case_name String, service String, ipath String, req String, expected String',
+FROM values('case_name String, service String, endpoint String, req String, expected String',
     ('two rules',    'svc-core', '/api/report/usage-history', '{"연락처정보":{"연락처":"010","이메일":"a@b"},"user":[{"phone":"010","name":"a"}]}', '{"연락처정보":{"이메일":"a@b"},"user":[{"name":"a"}]}'),
     ('one rule',     'svc-core', '/api/user/profile',          '{"user":{"rrn":"900101","phone":"010"}}',                                       '{"user":{"phone":"010"}}'),
     ('no rule',      'svc-core', '/api/other',                 '{"연락처정보":{"연락처":"010"}}',                                                '{"연락처정보":{"연락처":"010"}}'));
