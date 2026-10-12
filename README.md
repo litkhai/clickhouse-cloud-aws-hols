@@ -31,6 +31,7 @@ These labs are kept, not archived, but most have not been re-run since late 2025
 |-----|----------------|----------|
 | [labs/s3/terraform-chc-secures3-aws](labs/s3/terraform-chc-secures3-aws/) | Secure S3 integration with Terraform | 2025-11-30 |
 | [labs/s3/terraform-chc-secures3-aws-direct-attach](labs/s3/terraform-chc-secures3-aws-direct-attach/) | S3 integration via direct bucket policy access | 2025-12-05 ⚠️ |
+| [labs/s3/masking-on-load](labs/s3/masking-on-load/) | Masking sensitive rows while loading from S3: ClickPipes + MV (Terraform), load-then-`UPDATE`, `INSERT … SELECT FROM s3()` | 2026-10-12 |
 
 ### 💳 Billing (`labs/billing/`)
 
@@ -100,6 +101,7 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 |-----|----------------|----------|
 | [labs/s3/terraform-chc-secures3-aws](labs/s3/terraform-chc-secures3-aws/) | Terraform 기반 보안 S3 통합 | 2025-11-30 |
 | [labs/s3/terraform-chc-secures3-aws-direct-attach](labs/s3/terraform-chc-secures3-aws-direct-attach/) | 버킷 정책 직접 연결 방식 S3 통합 | 2025-12-05 ⚠️ |
+| [labs/s3/masking-on-load](labs/s3/masking-on-load/) | S3 적재 중 민감 행 마스킹: ClickPipes + MV(Terraform), 적재 후 `UPDATE`, `INSERT … SELECT FROM s3()` | 2026-10-12 |
 
 ### 💳 빌링 (`labs/billing/`)
 
