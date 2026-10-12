@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars, or export TF_VAR_<name> instead (deploy.sh expects the four ids/keys as TF_VAR_*).
+# organization_id = "00000000-0000-0000-0000-000000000000"
+# service_id      = "00000000-0000-0000-0000-000000000000"
+# token_key       = "..."
+# token_secret    = "..."
+
+# Default: the public Stack Overflow users file (1.36 GB Parquet, 22,484,235 rows).
+# source_url = "https://<bucket>.s3.ap-northeast-2.amazonaws.com/<prefix>/*.parquet"
+
+# Private bucket: an IAM role whose trust policy allows the service's ClickHouse IAM role
+# (labs/s3/terraform-chc-secures3-aws creates one).
+# iam_role_arn = "arn:aws:iam::123456789012:role/ClickHouseS3Access"

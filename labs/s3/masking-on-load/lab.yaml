@@ -1,0 +1,4 @@
+# Runner key (tools/lab.schema.md): the build deploy.sh last ran against end to end,
+# 2026-10-12 (README banner). hol does not run this lab (ClickHouse Cloud + ClickPipes), so there is no clickhouse key.
+# No publishing keys: whether this lab goes on the notes site is the owner's choice.
+verified_on: 26.6.1.2326
