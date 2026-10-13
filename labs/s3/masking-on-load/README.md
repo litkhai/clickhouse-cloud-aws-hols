@@ -1,10 +1,10 @@
 # Masking sensitive rows while loading from S3 — ClickPipes (Terraform), load-then-UPDATE, or INSERT … SELECT
 
 > **Last run: 2026-10-12** — `deploy.sh` → `destroy.sh` end to end on one ClickHouse Cloud service (AWS `ap-northeast-2`, 2 replicas, ClickHouse 26.6.1.2326), Terraform 1.16.4, provider `ClickHouse/clickhouse` 3.37.0. Source: the public Stack Overflow `users.parquet` in `eu-west-3` (1.36 GB, 22,484,235 rows), read without credentials. The IAM-role path for a private bucket (`iam_role_arn`) was not run.
-> Since then: `sql/40-json-fields.sql` (deleting fields inside a JSON string, literal data only) added and run on its own on the same service on 2026-10-12, 29 of 29 cases passing; it creates no pipe and is not part of `deploy.sh`.
+> Since then: `sql/40-json-fields.sql` (deleting fields inside a JSON string, literal data only) added and run on its own on the same service on 2026-10-12, 29 of 29 cases passing; it creates no pipe and is not part of `deploy.sh`. `41-regex-cost.sh` and `gen_mask_sql.py` (regex masking: per-row patterns vs generated literals) added and run on its own on the same service on 2026-10-13, three times.
 >
 > **마지막 실행: 2026-10-12** — ClickHouse Cloud 서비스 하나(AWS `ap-northeast-2`, replica 2개, ClickHouse 26.6.1.2326)에서 `deploy.sh` → `destroy.sh`를 끝까지 실행. Terraform 1.16.4, provider `ClickHouse/clickhouse` 3.37.0. 원본은 `eu-west-3`의 공개 Stack Overflow `users.parquet`(1.36 GB, 22,484,235행)를 자격 증명 없이 읽음. 비공개 버킷용 IAM role 경로(`iam_role_arn`)는 실행하지 않음.
-> 그 뒤: `sql/40-json-fields.sql`(JSON 문자열 안의 필드 삭제, 리터럴 데이터만)을 추가해 같은 서비스에서 2026-10-12 따로 실행, 29개 사례 모두 통과. 파이프를 만들지 않고 `deploy.sh`에 들어 있지 않음.
+> 그 뒤: `sql/40-json-fields.sql`(JSON 문자열 안의 필드 삭제, 리터럴 데이터만)을 추가해 같은 서비스에서 2026-10-12 따로 실행, 29개 사례 모두 통과. 파이프를 만들지 않고 `deploy.sh`에 들어 있지 않음. `41-regex-cost.sh`·`gen_mask_sql.py`(정규식 마스킹: 행마다 만드는 패턴 vs 생성한 상수)를 추가해 같은 서비스에서 2026-10-13 따로 세 번 실행.
 
 [English](#english) | [한국어](#한국어)
 
@@ -100,6 +100,20 @@ The alternative, a `JSON(SKIP request.class.field, …)` column, never stores th
 
 Not run: these expressions inside an MV fed by ClickPipes (the copied MV calling a UDF or a dictionary), and their cost at scale.
 
+#### Regex instead of rebuilding: keep the patterns constant
+
+A regex that replaces `"key": <value>` with `"key":null` reaches every depth, and also JSON that is itself encoded as a string (`\"key\": …`). The cost depends on whether the pattern is a constant. Building it per row from each key (`concat('"', regexpQuoteMeta(k), …)` inside `arrayFold`) was far slower than the same patterns written as literals. [`41-regex-cost.sh`](41-regex-cost.sh) measures both on 1,000,000 synthetic rows (about 700 bytes each), with 200 rules of two keys and two thirds of the rows matching (ClickHouse Cloud 26.6.1.2326, `max_threads` 2, 2026-10-13, three runs):
+
+| | Time |
+|---|---|
+| read only (`JSONExtractString`), 1M rows | 0.12–0.16 s |
+| generated literals, 1M rows | 1.86–2.72 s |
+| patterns built per row, **100k** rows | 7.4–12.6 s |
+
+That is about 40–50 times slower per row; with one rule of three keys and one third of the rows matching, an earlier run measured 79 s against 0.7–0.9 s per 1M rows (about 100 times). The cause — the pattern compiled per row — is inferred from these numbers, not read in the source. [`gen_mask_sql.py`](gen_mask_sql.py) turns a rules CSV (`endpoint,key`) into a `multiIf` with one literal pattern pair per endpoint (endpoints with the same keys share a branch, keys are regex-escaped). On 15 edge cases both forms give the same output. Neither form nulls a value that is itself nested (`{"key":{"a":{…}}}`, `[{"v":[…]}]`) — a residual check (`"key"\s*:\s*[^n\s]`) catches those — or a key stored as `\uXXXX` escapes, which the residual check does not catch.
+
+One pitfall when timing: wrapping the work in `SELECT count() FROM (… GROUP BY …)` let the optimizer skip computing the masked column, and a 54-second query showed 0.46 s.
+
 ### Pitfalls
 
 - **`NULL` in the rule means "not masked".** `if(cond, …)` follows `WHERE` semantics, so a row whose condition is `NULL` keeps its values — as it would be skipped by `UPDATE … WHERE`. If such rows must be masked, use `ifNull(<rule>, true)`. The lab source has no `NULL` in `LastAccessDate`.
@@ -121,6 +135,7 @@ Not run: these expressions inside an MV fed by ClickPipes (the copied MV calling
 | `sql/20-c-insert-select.sql` | C |
 | `sql/30…34-b-*.sql` | B: raw load, lightweight `UPDATE`, `ALTER TABLE … UPDATE`, residue checks, `APPLY PATCHES` |
 | `sql/40-json-fields.sql` | deleting fields inside a JSON string: top-level keys, `class.field` UDFs, rules through a dictionary, `JSON(SKIP …)`; runs on its own |
+| `41-regex-cost.sh` · `gen_mask_sql.py` | regex masking cost: per-row patterns vs generated literals; the generator turns `endpoint,key` rules into a `multiIf`; runs on its own |
 | `sql/90-verify.sql` | per-table check (`--param_t=<table>`) |
 | `terraform/` | the ClickPipe; credentials as `TF_VAR_*` or `terraform.tfvars` (from `terraform.tfvars.example`) |
 
@@ -216,6 +231,20 @@ MV 복사본이 블록마다 마스킹하므로 스테이징 테이블에는 마
 
 실행하지 않은 것: ClickPipes가 채우는 MV 안에서 이 식들(복사된 MV가 UDF나 딕셔너리를 부르는 것), 그리고 대규모에서의 비용.
 
+#### 다시 조립하는 대신 정규식으로: 패턴은 상수로
+
+`"key": <값>`을 `"key":null`로 바꾸는 정규식은 어느 깊이든, 그리고 문자열로 한 번 더 감싼 JSON(`\"key\": …`)까지 닿습니다. 비용은 패턴이 상수인지에 달려 있습니다. 키마다 행에서 패턴을 조립하면(`arrayFold` 안의 `concat('"', regexpQuoteMeta(k), …)`), 같은 패턴을 상수로 쓴 것보다 훨씬 느렸습니다. [`41-regex-cost.sh`](41-regex-cost.sh)가 합성 100만 행(행당 약 700바이트), 키 두 개짜리 규칙 200개, 3분의 2 행이 규칙에 걸리는 조건에서 둘을 잽니다(ClickHouse Cloud 26.6.1.2326, `max_threads` 2, 2026-10-13, 세 번).
+
+| | 시간 |
+|---|---|
+| 읽기만(`JSONExtractString`), 100만 행 | 0.12–0.16초 |
+| 생성한 상수, 100만 행 | 1.86–2.72초 |
+| 행마다 만든 패턴, **10만** 행 | 7.4–12.6초 |
+
+행당 약 40–50배 느립니다. 키 세 개짜리 규칙 하나, 3분의 1 행이 걸리는 앞선 실행에서는 100만 행에 79초 대 0.7–0.9초(약 100배)였습니다. 원인(행마다 패턴을 컴파일)은 이 수치에서 추정한 것이고 소스로 확인하지는 않았습니다. [`gen_mask_sql.py`](gen_mask_sql.py)는 규칙 CSV(`endpoint,key`)를 엔드포인트마다 상수 패턴 한 쌍을 가진 `multiIf`로 바꿉니다(키가 같은 엔드포인트는 한 분기로, 키는 정규식 이스케이프). 경계 사례 15개에서 두 형태의 결과가 같았습니다. 두 형태 모두 값 자체가 중첩 구조인 경우(`{"key":{"a":{…}}}`, `[{"v":[…]}]`)는 null로 바꾸지 못하고 — 잔존 검사(`"key"\s*:\s*[^n\s]`)가 잡습니다 — `\uXXXX`로 이스케이프된 키도 바꾸지 못합니다. 이쪽은 잔존 검사에도 안 잡힙니다.
+
+잴 때의 함정 하나: 작업을 `SELECT count() FROM (… GROUP BY …)`로 감싸면 최적화기가 마스킹 컬럼 계산을 건너뛰어, 54초 걸리는 쿼리가 0.46초로 보였습니다.
+
 ### 주의할 점
 
 - **규칙이 `NULL`이면 "마스킹 안 함"입니다.** `if(cond, …)`는 `WHERE`와 같은 의미라서, 조건이 `NULL`인 행은 값이 그대로 남습니다 — `UPDATE … WHERE`에서 건너뛰는 것과 같습니다. 그런 행도 마스킹해야 하면 `ifNull(<규칙>, true)`를 씁니다. 실습 원본의 `LastAccessDate`에는 `NULL`이 없습니다.
@@ -237,5 +266,6 @@ MV 복사본이 블록마다 마스킹하므로 스테이징 테이블에는 마
 | `sql/20-c-insert-select.sql` | C |
 | `sql/30…34-b-*.sql` | B: 원본 적재, lightweight `UPDATE`, `ALTER TABLE … UPDATE`, 잔존 확인, `APPLY PATCHES` |
 | `sql/40-json-fields.sql` | JSON 문자열 안의 필드 삭제: 최상위 키, `클래스.필드` UDF, 딕셔너리를 거친 규칙, `JSON(SKIP …)`. 따로 실행 |
+| `41-regex-cost.sh` · `gen_mask_sql.py` | 정규식 마스킹 비용: 행마다 만든 패턴 vs 생성한 상수. 생성기는 `endpoint,key` 규칙을 `multiIf`로 바꿈. 따로 실행 |
 | `sql/90-verify.sql` | 테이블별 확인(`--param_t=<table>`) |
 | `terraform/` | ClickPipe. 자격 증명은 `TF_VAR_*` 또는 `terraform.tfvars`(`terraform.tfvars.example`에서 복사) |
