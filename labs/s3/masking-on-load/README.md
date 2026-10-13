@@ -10,6 +10,8 @@
 
 ## English
 
+> **Related notes**: [Removing sensitive data while loading from S3, not after](https://clickhouse.litkhai.dev/en/articles/cloud/s3-load-remove-sensitive-data/)
+
 Parquet files in S3 hold sensitive columns. The rows that must be masked are already defined by a `WHERE` clause. The load is one-off, with a few retries expected. Should the masking run inside a ClickPipe deployed with Terraform, or should the data be loaded into ClickHouse Cloud first and masked with an `UPDATE`?
 
 This lab runs three ways on the same file and the same rule, and checks every result row by row:
@@ -140,6 +142,8 @@ One pitfall when timing: wrapping the work in `SELECT count() FROM (… GROUP BY
 | `terraform/` | the ClickPipe; credentials as `TF_VAR_*` or `terraform.tfvars` (from `terraform.tfvars.example`) |
 
 ## 한국어
+
+> **관련 글**: [S3 적재 중 민감정보 지우기: 적재한 뒤가 아니라 적재하면서](https://clickhouse.litkhai.dev/articles/cloud/s3-load-remove-sensitive-data/)
 
 S3의 Parquet 파일에 민감한 컬럼이 있고, 마스킹할 행은 이미 `WHERE` 절로 정해져 있습니다. 적재는 일회성이고 몇 번의 재시도가 예상됩니다. 마스킹을 Terraform으로 배포한 ClickPipe 안에서 해야 할까요, 아니면 ClickHouse Cloud에 먼저 적재한 뒤 `UPDATE`로 해야 할까요?
 
