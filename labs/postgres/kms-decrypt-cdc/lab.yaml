@@ -1,3 +1,11 @@
 # Runner key (tools/lab.schema.md): the build the lab last ran against, 2026-11-04 (README banner).
 # hol does not run this lab (ClickHouse Cloud + ClickPipes + AWS), so there is no clickhouse key.
 verified_on: 26.6.1.2455
+# Publishing keys (tools/lab.schema.md) — published 2026-11-04 (owner's choice)
+web: true
+title_ko: "Postgres CDC 뒤 KMS 암호화 값 풀기: ClickHouse Cloud UDF와 ClickHouse에 둔 키"
+summary_ko: "jsonb 안의 KMS 보호 AES-256-CBC 값을 Aurora PostgreSQL 16에서 ClickPipes CDC로 옮겨 ClickHouse Cloud에서 풀고, KMS를 부르는 실행형 UDF와 ClickHouse에 둔 키를 권한·장애·비용으로 비교하는 실습입니다."
+title_en: "Decrypting KMS-protected values after Postgres CDC: a ClickHouse Cloud UDF vs a key kept in ClickHouse"
+summary_en: "Move KMS-protected AES-256-CBC values inside jsonb from Aurora PostgreSQL 16 with ClickPipes CDC, decrypt them in ClickHouse Cloud, and compare an executable UDF calling KMS with a key kept in ClickHouse on access, failure and cost."
+category: cloud
+tags: [postgres, clickpipes, materialized-view, ingestion]
