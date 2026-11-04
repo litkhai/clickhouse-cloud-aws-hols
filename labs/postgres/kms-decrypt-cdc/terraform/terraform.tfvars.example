@@ -1,0 +1,4 @@
+owner               = "your-name"
+ttl                 = "2026-12-31"               # when this lab should be gone
+allowed_cidr_blocks = ["203.0.113.10/32"]        # your address: curl -s https://checkip.amazonaws.com
+# create_udf_user   = false                      # if an SCP forbids IAM users: a kms:Decrypt-only role instead (1-hour credentials)
