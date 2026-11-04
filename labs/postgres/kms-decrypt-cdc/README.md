@@ -1,8 +1,10 @@
 # Decrypting KMS-protected values inside JSON after Postgres CDC — a ClickHouse Cloud UDF vs a key kept in ClickHouse
 
 > **Last run: 2026-11-04** — every step ran once, one script at a time in the order `deploy.sh` lists them, then `cdc-changes.sh`, the checks and `destroy.sh`, on AWS `ap-northeast-2`: Aurora PostgreSQL 16.13 (`db.t4g.medium`, `rds.logical_replication = 1`), a ClickHouse Cloud test service (1 replica, 8 GiB, ClickHouse 26.6.1.2455, `max_threads` 2), ClickPipes Postgres CDC (`syncIntervalSeconds` 10, `pullBatchSize` 100000), a Python 3.11 executable UDF (`sandboxType: netenable`). Terraform 1.16.4, `hashicorp/aws` 5.100.0. `deploy.sh` itself was not run as one script. Not run: the IAM-user path (`create_udf_user = true`) — an SCP in the lab account denied `iam:CreateUser`, so the UDF got 1-hour STS credentials from a role; path C (decrypt before load, e.g. a Lambda) is described, not run. Local rehearsal of the UDF against real KMS on clickhouse local 26.9.6.6, 10,000 of 10,000 rows correct.
+> Second run the same day (10:58–11:50 UTC, same setup, a new service) to record the process with console captures: [`RUN-2026-11-04.md`](RUN-2026-11-04.md). Its numbers agree with the table below (backfill A 13.1 s, B 10.6 s; per-row keys held A 4 min 20 s; all rows correct).
 >
 > **마지막 실행: 2026-11-04** — `deploy.sh`에 적힌 순서대로 스크립트를 하나씩 한 번 실행하고, 이어서 `cdc-changes.sh`, 검사, `destroy.sh`까지 실행. AWS `ap-northeast-2`: Aurora PostgreSQL 16.13(`db.t4g.medium`, `rds.logical_replication = 1`), ClickHouse Cloud 테스트 서비스(replica 1개, 8 GiB, ClickHouse 26.6.1.2455, `max_threads` 2), ClickPipes Postgres CDC(`syncIntervalSeconds` 10, `pullBatchSize` 100000), Python 3.11 실행형 UDF(`sandboxType: netenable`). Terraform 1.16.4, `hashicorp/aws` 5.100.0. `deploy.sh`를 한 번에 돌리지는 않았다. 실행하지 않은 것: IAM 사용자 경로(`create_udf_user = true`) — 실습 계정의 SCP가 `iam:CreateUser`를 막아 UDF는 역할의 1시간 STS 자격 증명을 썼다. 경로 C(적재 전 복호화, 예: Lambda)는 설명만 했다. UDF를 실제 KMS로 clickhouse local 26.9.6.6에서 미리 돌려 10,000행 중 10,000행 정답.
+> 같은 날 두 번째 실행(10:58–11:50 UTC, 같은 구성, 새 서비스)으로 과정을 콘솔 캡처와 함께 남겼다: [`RUN-2026-11-04.md`](RUN-2026-11-04.md). 수치는 아래 표와 맞는다(채우기 A 13.1초, B 10.6초, 행마다 키가 A를 4분 20초 붙잡음, 모든 행 정답).
 
 [English](#english) | [한국어](#한국어)
 
@@ -24,7 +26,7 @@ An application encrypts sensitive values with AES-256-CBC under a data key that 
 - **But the key leaves KMS's control in ways a Lambda does not:**
   1. A Cloud UDF has **no cloud identity and no secret store** yet, so the AWS credentials ship inside the UDF zip. Static keys, or short STS credentials you must republish before they expire (≈3.5 minutes per republish here).
   2. **Any SQL user can call the UDF.** A user with `SELECT` on one decrypted table only called `kms_unwrap(edk)` and got a plaintext data key back. The encrypted data key is not secret (it sits next to the data), so in practice everyone who can query the service can unwrap keys.
-  3. **A failing UDF stops the whole pipe.** With broken credentials the view failed, ClickPipes retried the same batch, and nothing else arrived — not even path B's table or `raw.users` — for 7 minutes, until a fixed version was attached.
+  3. **A failing UDF stops the whole pipe.** With broken credentials the view failed and ClickPipes retried the batch; no batch completed until a fixed version was attached (about 7 minutes in both runs: 08:56–09:03 and 11:31:54–11:39:09). In the first run nothing else reached `raw.users` or path B's table either; in the second, retries wrote later changes to both (twice, merged by `FINAL`) while path A got none.
 - **Key granularity decides the cost.** One data key per tenant: 8 KMS calls for 1,000,000 rows (13.8 s to decrypt them, vs 11.9 s with the key in ClickHouse). One data key per row: about 37 KMS calls per second from the UDF — 10,000 new keys held one CDC batch for 4.5 minutes.
 - **Choose C (decrypt before load)** when keys must stay inside the IAM/KMS boundary or more than a few people can query the service. **Choose B** when the key may live in ClickHouse: no KMS on the ingest path, ordinary `GRANT`s protect the key table and dictionary, rotation is a new key id. **Choose A** only for a service with few, trusted SQL users, a key per tenant (not per row), and a credential-rotation job that republishes the UDF.
 
@@ -45,7 +47,7 @@ Data: 1,000,000 users in 8 tenants (one data key each), `properties` jsonb with 
 | Correct rows after CDC (10,000 updates with rotated keys, 1,000 deletes, 10,000 per-row keys) | 1,009,000 / 1,009,000 in A and B; deleted rows hidden by `FINAL` |
 | KMS `Decrypt` calls by the UDF role, whole run (CloudTrail) | 12,500, all from one service egress IP |
 | Search on stored plaintext vs decrypting at query time (41,902 matches) | 0.13 s vs 1.7–2.1 s; first run 65.7 s (cold key cache, 10,000 per-row keys) |
-| Broken UDF credentials → pipe | `Running` but stuck: raw, A and B all stopped; caught up 219 s after republishing (build 128 s, attach 78 s, `SYSTEM RELOAD FUNCTION`) |
+| Broken UDF credentials → pipe | `Running` but no batch completes; A gets nothing (raw and B: nothing in the first run, retried rows in the second); caught up 219 s after republishing (build 128 s, attach 78 s, `SYSTEM RELOAD FUNCTION`), 265 s in the second run |
 
 #### Who can reach a key
 
@@ -70,6 +72,18 @@ The decrypted `properties` keeps every value as a string, so conditions cast at 
 | `SELECT CAST(j, 'JSON') … SETTINGS input_format_try_infer_dates = 0, …` | **`String`, `String`** |
 
 `sql/30-mvs.sql` uses the last form; 1,000 later updates through it stored `String`.
+
+### The process in captures (second run)
+
+The full sequence with commands, outputs and 20 console captures is in [`RUN-2026-11-04.md`](RUN-2026-11-04.md). Four of them:
+
+![raw.users holds enc:v1:… ciphertext; app.users_a holds the plaintext](img/08-ciphertext-vs-decrypted.png)
+
+![While A waited on 10,000 KMS calls: the CDC batch stays at Pushing, 0 rows pushed](img/11-cdc-batch-pushing.png)
+
+![With broken UDF credentials: two batches stuck at Pushing](img/15-cdc-stuck.png)
+
+![query_log: decrypt() arguments are [HIDDEN]; a key elsewhere in the query text is logged as written](img/14-query-log-masking.png)
 
 #### Cost
 
@@ -120,7 +134,7 @@ With role credentials (`create_udf_user = false`) the UDF stops working an hour 
 - **다만 Lambda와 달리 키가 KMS 통제를 벗어나는 지점이 생긴다.**
   1. Cloud UDF에는 아직 **클라우드 신원도 비밀 저장소도 없다.** AWS 자격 증명을 UDF zip 안에 넣어야 한다. 정적 키를 쓰거나, 짧은 STS 자격 증명을 만료 전에 다시 배포해야 한다(이번에 다시 배포 한 번에 약 3.5분).
   2. **SQL 사용자라면 누구나 UDF를 부를 수 있다.** 복호화된 테이블 하나에 `SELECT` 권한만 있는 사용자가 `kms_unwrap(edk)`를 불러 평문 데이터 키를 받았다. 암호화된 데이터 키는 데이터 옆에 있어 비밀이 아니다. 결국 서비스에 쿼리할 수 있는 사람은 모두 키를 풀 수 있다.
-  3. **UDF가 실패하면 파이프 전체가 멈춘다.** 자격 증명을 망가뜨리자 뷰가 실패했고, ClickPipes는 같은 배치를 다시 시도했다. 고친 버전을 붙일 때까지 7분 동안 아무것도 들어오지 않았다. 경로 B의 테이블과 `raw.users`도 마찬가지였다.
+  3. **UDF가 실패하면 파이프 전체가 멈춘다.** 자격 증명을 망가뜨리자 뷰가 실패했고 ClickPipes는 배치를 다시 시도했다. 고친 버전을 붙일 때까지 완료된 배치가 없었다(두 번 모두 약 7분: 08:56–09:03, 11:31:54–11:39:09). 첫 실행에서는 `raw.users`와 경로 B의 테이블에도 아무것도 들어오지 않았다. 두 번째 실행에서는 다시 시도하면서 나중의 변경이 둘 다에 들어갔지만(두 번씩, `FINAL`이 합침) 경로 A에는 하나도 들어가지 않았다.
 - **키 단위가 비용을 정한다.** 테넌트마다 키 하나면 1,000,000행에 KMS 호출 8번이다(복호화 13.8초, ClickHouse에 키를 둔 B는 11.9초). 행마다 키 하나면 UDF에서 KMS 호출이 초당 약 37번이다. 새 키 10,000개가 CDC 배치 하나를 4.5분 붙잡았다.
 - **C(적재 전 복호화)를 고를 때:** 키가 IAM/KMS 경계 안에 있어야 하거나, 서비스에 쿼리하는 사람이 몇 명을 넘는다.
 - **B를 고를 때:** 키가 ClickHouse에 있어도 된다. 적재 경로에 KMS가 없고, 키 테이블과 딕셔너리는 평범한 `GRANT`로 보호되며, 키 교체는 새 키 id가 된다.
@@ -143,7 +157,7 @@ With role credentials (`create_udf_user = false`) the UDF stops working an hour 
 | CDC 뒤 정답 행(키를 바꾼 갱신 10,000건, 삭제 1,000건, 행마다 키 10,000명) | A·B 모두 1,009,000 / 1,009,000. 삭제된 행은 `FINAL`이 숨긴다 |
 | 실행 전체에서 UDF 역할의 KMS `Decrypt` 호출(CloudTrail) | 12,500번, 모두 서비스 egress IP 하나에서 |
 | 저장된 평문 검색 vs 쿼리 시점 복호화(41,902건 일치) | 0.13초 vs 1.7~2.1초. 첫 실행 65.7초(키 캐시가 비어 있고 행마다 키 10,000개) |
-| UDF 자격 증명이 깨졌을 때 파이프 | 상태는 `Running`이지만 멈춤: raw·A·B 모두 정지. 다시 배포한 뒤 219초 만에 따라잡음(빌드 128초, 붙이기 78초, `SYSTEM RELOAD FUNCTION`) |
+| UDF 자격 증명이 깨졌을 때 파이프 | 상태는 `Running`이지만 완료되는 배치가 없음. A에는 아무것도 안 들어옴(raw·B는 첫 실행에서 없음, 두 번째에서는 다시 시도한 행이 들어옴). 다시 배포한 뒤 219초 만에 따라잡음(빌드 128초, 붙이기 78초, `SYSTEM RELOAD FUNCTION`), 두 번째 실행은 265초 |
 
 #### 누가 키에 닿을 수 있나
 
@@ -168,6 +182,18 @@ With role credentials (`create_udf_user = false`) the UDF stops working an hour 
 | `SELECT CAST(j, 'JSON') … SETTINGS input_format_try_infer_dates = 0, …` | **`String`, `String`** |
 
 `sql/30-mvs.sql`은 마지막 형태를 쓴다. 이 뷰로 들어온 이후 갱신 1,000건은 `String`으로 저장됐다.
+
+### 캡처로 본 과정 (두 번째 실행)
+
+명령, 출력, 콘솔 캡처 20장으로 이어지는 전체 과정은 [`RUN-2026-11-04.md`](RUN-2026-11-04.md)에 있다. 그중 넷:
+
+![raw.users에는 enc:v1:… 암호문, app.users_a에는 평문](img/08-ciphertext-vs-decrypted.png)
+
+![A가 KMS 호출 1만 번을 기다리는 동안 CDC 배치는 Pushing, 반영 0행](img/11-cdc-batch-pushing.png)
+
+![UDF 자격 증명이 깨졌을 때 배치 둘이 Pushing에서 멈춤](img/15-cdc-stuck.png)
+
+![query_log: decrypt() 인자는 [HIDDEN], 쿼리 문장의 다른 곳에 쓴 키는 그대로 남음](img/14-query-log-masking.png)
 
 #### 비용
 

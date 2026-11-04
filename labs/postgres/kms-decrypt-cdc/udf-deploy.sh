@@ -11,7 +11,7 @@ build=out/udf-build; rm -rf "$build"; mkdir -p "$build"
 cp udf/kms_unwrap/main.py "$build/"
 # Credentials for config.json: the IAM user's access key, or (create_udf_user = false) 1-hour STS
 # credentials from the kms:Decrypt-only role — then re-run this script before they expire.
-role=$(terraform -chdir=terraform output -raw udf_role_arn)
+role=${UDF_ROLE_ARN:-$(terraform -chdir=terraform output -raw udf_role_arn)}
 ( umask 077
   if [ -n "$role" ]; then
     aws sts assume-role --role-arn "$role" --role-session-name kms-unwrap-udf --duration-seconds 3600 --output json \
