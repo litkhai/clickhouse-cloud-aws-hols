@@ -4,7 +4,7 @@
 
 ## English
 
-Terraform labs that stand up AWS-side infrastructure for ClickHouse Cloud — Confluent Kafka, MinIO and Glue data lakes, and secure S3 access — and a billing lab that reads the Usage Cost API and creates nothing, and a Postgres lab on Aurora's embedded DuckDB and pg_clickhouse.
+Terraform labs that stand up AWS-side infrastructure for ClickHouse Cloud — Confluent Kafka, MinIO and Glue data lakes, and secure S3 access — and a billing lab that reads the Usage Cost API and creates nothing, and Postgres labs on Aurora's embedded DuckDB and pg_clickhouse, and on decrypting KMS-protected values after ClickPipes CDC.
 
 > This repository was split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols) on the `pre-split-2026-10` tag, with history. The last version of these labs in the original repository: https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10
 
@@ -44,6 +44,7 @@ These labs are kept, not archived, but most have not been re-run since late 2025
 | Lab | What it covers | Last run |
 |-----|----------------|----------|
 | [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | Aurora PostgreSQL `aurora_analytics` (embedded DuckDB) on db.t4g, and pg_clickhouse → ClickHouse Cloud at a similar size, TPC-DS-derived SF1 / SF10 / SF100, Glue + Iceberg | 2026-10-09 (partial: SF1, SF10, SF100, SF10 on Glue + Iceberg; targets A, B, E, P) |
+| [labs/postgres/kms-decrypt-cdc](labs/postgres/kms-decrypt-cdc/) | KMS-wrapped AES-256-CBC values inside jsonb, Aurora PostgreSQL 16 → ClickPipes CDC → decrypted in ClickHouse Cloud: executable UDF calling KMS vs key kept in ClickHouse; access, failure and cost | 2026-11-04 (step by step; IAM-user path not run) |
 
 ### 🔗 Related repositories
 
@@ -74,7 +75,7 @@ After changing a `lab.yaml`, run `python3 tools/labs_json.py` and commit the fil
 
 ## 한국어
 
-ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 실습(Confluent Kafka, MinIO·Glue 데이터 레이크, 보안 S3 접근)과, 아무것도 만들지 않고 Usage Cost API만 읽는 빌링 실습, Aurora 내장 DuckDB와 pg_clickhouse를 다루는 Postgres 실습입니다.
+ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 실습(Confluent Kafka, MinIO·Glue 데이터 레이크, 보안 S3 접근)과, 아무것도 만들지 않고 Usage Cost API만 읽는 빌링 실습, Aurora 내장 DuckDB와 pg_clickhouse, ClickPipes CDC 뒤 KMS 보호 값 복호화를 다루는 Postgres 실습입니다.
 
 > 이 저장소는 [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols)의 `pre-split-2026-10` 태그 시점에서 히스토리와 함께 분리했습니다. 원래 저장소에 있던 마지막 버전: https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10
 
@@ -114,6 +115,7 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 | 실습 | 내용 | 마지막 실행 |
 |-----|----------------|----------|
 | [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | db.t4g에서 Aurora PostgreSQL `aurora_analytics`(내장 DuckDB), 비슷한 크기의 pg_clickhouse → ClickHouse Cloud, TPC-DS 파생 SF1·SF10·SF100, Glue + Iceberg | 2026-10-09 (일부: SF1, SF10, SF100, Glue + Iceberg 위 SF10; 대상 A·B·E·P) |
+| [labs/postgres/kms-decrypt-cdc](labs/postgres/kms-decrypt-cdc/) | jsonb 안의 KMS 보호 AES-256-CBC 값, Aurora PostgreSQL 16 → ClickPipes CDC → ClickHouse Cloud에서 복호화: KMS를 부르는 실행형 UDF vs ClickHouse에 둔 키, 접근·장애·비용 | 2026-11-04 (단계별 실행, IAM 사용자 경로 미실행) |
 
 ### 🔗 관련 저장소
 
