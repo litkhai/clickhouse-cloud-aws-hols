@@ -8,6 +8,8 @@
 
 ## English
 
+> **Related notes**: [Decrypting KMS-encrypted values after Postgres CDC: a ClickHouse Cloud UDF vs keys kept in ClickHouse](https://clickhouse.litkhai.dev/en/articles/cloud/postgres-cdc-kms-decrypt/)
+
 An application encrypts sensitive values with AES-256-CBC under a data key that AWS KMS wraps (envelope encryption) and stores them in PostgreSQL — most of them **inside a `jsonb` column**. ClickPipes copies the table to ClickHouse Cloud with CDC. Can ClickHouse Cloud decrypt those values itself, with the key still protected by KMS, instead of a Lambda in front of the load?
 
 | | Path | Where the data key comes from |
@@ -101,6 +103,8 @@ clickhouse client … --param_t=users_a --queries-file sql/42-verify-final.sql
 With role credentials (`create_udf_user = false`) the UDF stops working an hour after `udf-deploy.sh`; run it again before that.
 
 ## 한국어
+
+> **관련 글**: [Postgres CDC 뒤 KMS 암호화 값 풀기: ClickHouse Cloud UDF와 ClickHouse에 둔 키](https://clickhouse.litkhai.dev/articles/cloud/postgres-cdc-kms-decrypt/)
 
 애플리케이션이 민감한 값을 AES-256-CBC로 암호화해 PostgreSQL에 저장한다. 데이터 키는 AWS KMS가 감싼다(envelope 암호화). 암호화된 값은 대부분 **`jsonb` 컬럼 안에** 있다. ClickPipes가 이 테이블을 CDC로 ClickHouse Cloud에 복사한다. 적재 앞단의 Lambda 대신, 키를 KMS로 보호한 채 ClickHouse Cloud가 직접 풀 수 있을까?
 
