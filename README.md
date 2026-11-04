@@ -45,6 +45,7 @@ These labs are kept, not archived, but most have not been re-run since late 2025
 |-----|----------------|----------|
 | [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | Aurora PostgreSQL `aurora_analytics` (embedded DuckDB) on db.t4g, and pg_clickhouse → ClickHouse Cloud at a similar size, TPC-DS-derived SF1 / SF10 / SF100, Glue + Iceberg | 2026-10-09 (partial: SF1, SF10, SF100, SF10 on Glue + Iceberg; targets A, B, E, P) |
 | [labs/postgres/kms-decrypt-cdc](labs/postgres/kms-decrypt-cdc/) | KMS-wrapped AES-256-CBC values inside jsonb, Aurora PostgreSQL 16 → ClickPipes CDC → decrypted in ClickHouse Cloud: executable UDF calling KMS vs key kept in ClickHouse; access, failure and cost | 2026-11-04 (step by step; IAM-user path not run) |
+| [labs/postgres/clickpipes-kms-decrypt-refresh](labs/postgres/clickpipes-kms-decrypt-refresh/) | ClickPipes Postgres CDC landing ciphertext only, decryption in refreshable MVs beside the pipe: a UDF that keeps the KMS key inside (credentials bound to Cloud egress IPs) vs a key dictionary; CDC never waits, failures heal | 2026-11-04 |
 
 ### 🔗 Related repositories
 
@@ -116,6 +117,7 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 |-----|----------------|----------|
 | [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | db.t4g에서 Aurora PostgreSQL `aurora_analytics`(내장 DuckDB), 비슷한 크기의 pg_clickhouse → ClickHouse Cloud, TPC-DS 파생 SF1·SF10·SF100, Glue + Iceberg | 2026-10-09 (일부: SF1, SF10, SF100, Glue + Iceberg 위 SF10; 대상 A·B·E·P) |
 | [labs/postgres/kms-decrypt-cdc](labs/postgres/kms-decrypt-cdc/) | jsonb 안의 KMS 보호 AES-256-CBC 값, Aurora PostgreSQL 16 → ClickPipes CDC → ClickHouse Cloud에서 복호화: KMS를 부르는 실행형 UDF vs ClickHouse에 둔 키, 접근·장애·비용 | 2026-11-04 (단계별 실행, IAM 사용자 경로 미실행) |
+| [labs/postgres/clickpipes-kms-decrypt-refresh](labs/postgres/clickpipes-kms-decrypt-refresh/) | 암호문만 적재하는 ClickPipes Postgres CDC, 파이프 옆 refreshable MV에서 복호화: KMS 키를 안에 두는 UDF(자격 증명은 Cloud egress IP에서만) vs 키 딕셔너리. CDC는 기다리지 않고 장애는 스스로 복구 | 2026-11-04 |
 
 ### 🔗 관련 저장소
 

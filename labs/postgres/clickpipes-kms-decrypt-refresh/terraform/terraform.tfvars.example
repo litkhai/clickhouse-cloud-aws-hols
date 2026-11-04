@@ -1,0 +1,7 @@
+owner               = "your-name"
+ttl                 = "2026-12-31"
+allowed_cidr_blocks = ["203.0.113.10/32"]   # your address: curl -s https://checkip.amazonaws.com
+create_udf_user     = false                 # a kms:Decrypt-only role (1-hour credentials); true = an IAM user, if your account allows one
+# ClickHouse Cloud egress IPs of the service's region (https://api.clickhouse.cloud/static-ips.json, "egress_ips"):
+# the UDF's credentials only work from there.
+udf_allowed_source_ips = ["13.125.171.49", "3.34.229.201", "3.36.186.37", "43.202.136.145", "43.202.180.247", "43.203.109.145", "54.116.10.168"]
