@@ -83,7 +83,7 @@ The full sequence with commands, outputs and 20 console captures is in [`RUN-202
 
 ![With broken UDF credentials: two batches stuck at Pushing](img/15-cdc-stuck.png)
 
-![query_log: decrypt() arguments are [HIDDEN]; a key elsewhere in the query text is logged as written](img/14-query-log-masking.png)
+![query_log: decrypt() arguments are HIDDEN; a key elsewhere in the query text is logged as written](img/14-query-log-masking.png)
 
 #### Cost
 
@@ -193,7 +193,7 @@ With role credentials (`create_udf_user = false`) the UDF stops working an hour 
 
 ![UDF 자격 증명이 깨졌을 때 배치 둘이 Pushing에서 멈춤](img/15-cdc-stuck.png)
 
-![query_log: decrypt() 인자는 [HIDDEN], 쿼리 문장의 다른 곳에 쓴 키는 그대로 남음](img/14-query-log-masking.png)
+![query_log: decrypt() 인자는 HIDDEN, 쿼리 문장의 다른 곳에 쓴 키는 그대로 남음](img/14-query-log-masking.png)
 
 #### 비용
 
