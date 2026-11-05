@@ -11,6 +11,8 @@
 > - Potential issue: `deploy.sh` prints `glue_database = '…'` as an active setting, while this README and `outputs.tf` comment it out. With no such setting in `v25.8.1.5101-lts` or `v26.6.1.1193-stable`, the SQL copied from `deploy.sh` may be rejected — not run.
 > - The docs page marks the integration Beta and says to run `SET allow_database_glue_catalog = 1;`. The SQL that `deploy.sh` and `outputs.tf` print does not set it.
 >
+> Found 2026-11-05 — a deployment from 2025-11-16 was still in the account ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)). It came from code older than `bb9c885`, which used other names: the bucket `chc-iceberg-data-<account_id>`, and the crawlers `chc-glue-integration-csv-crawler` and `chc-glue-integration-parquet-crawler` beside the iceberg one. Its iceberg crawler had the schedule `cron(0/5 * * * ? *)` and ran every 5 minutes for almost a year without creating a table. The lab folder had no `terraform.tfstate`, and without one `destroy.sh` prints "No terraform.tfstate found. Nothing to destroy." and exits. Everything was deleted with the AWS CLI on 2026-11-05; *Cleanup* shows how to check for leftovers. The current `main.tf` sets no crawler schedule. Nothing was re-run.
+>
 > **마지막 검증: 2025-11-17** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
 > 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
 > AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
@@ -21,6 +23,8 @@
 > - `glue_database`: `v26.6.1.1193-stable`에도 이런 설정은 없습니다. 문서에 따르면 ClickHouse는 네임스페이스를 하나만 지원해서, 리전의 카탈로그 전체가 데이터베이스 하나가 되고 테이블 이름은 `` `database.table` `` 형태입니다. 이 실습의 예시는 Glue 데이터베이스 이름 없이 `` glue_db.`sales_orders` ``를 조회합니다 — 확인 안 함.
 > - 잠재 문제: `deploy.sh`는 `glue_database = '…'`를 활성 설정으로 출력하지만, 이 README와 `outputs.tf`는 주석 처리합니다. `v25.8.1.5101-lts`와 `v26.6.1.1193-stable` 모두 이런 설정이 없으므로 `deploy.sh`에서 복사한 SQL은 거부될 수 있습니다 — 실행 안 함.
 > - 문서는 이 연동을 Beta로 표시하고 `SET allow_database_glue_catalog = 1;`을 실행하라고 합니다. `deploy.sh`와 `outputs.tf`가 출력하는 SQL에는 이 설정이 없습니다.
+>
+> 2026-11-05 발견 — 2025-11-16에 배포한 리소스가 계정에 그대로 남아 있었습니다 ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)). `bb9c885` 이전 코드로 만든 것이라 이름이 다릅니다. 버킷은 `chc-iceberg-data-<account_id>`이고, iceberg 크롤러 옆에 `chc-glue-integration-csv-crawler`와 `chc-glue-integration-parquet-crawler`가 더 있었습니다. iceberg 크롤러에는 `cron(0/5 * * * ? *)` 스케줄이 걸려 있어서 1년 가까이 5분마다 돌았고, 테이블은 하나도 만들지 않았습니다. 실습 폴더에 `terraform.tfstate`가 없었는데, 이 파일이 없으면 `destroy.sh`는 "No terraform.tfstate found. Nothing to destroy."를 출력하고 끝납니다. 2026-11-05에 AWS CLI로 모두 지웠습니다. 남은 리소스를 확인하는 방법은 *정리*에 있습니다. 지금 `main.tf`에는 크롤러 스케줄이 없습니다. 다시 실행하지는 않았습니다.
 
 [English](#english) | [한국어](#한국어)
 
@@ -257,10 +261,21 @@ If you see permission denied errors for IAM operations:
 ```
 
 This will:
-- Destroy all AWS resources (S3 bucket, Glue database, crawlers, IAM roles)
+- Run `terraform destroy` on what `terraform.tfstate` in this folder records (S3 bucket, Glue database, crawler, IAM role)
 - Optionally clean up local Terraform state files
 
 ⚠️ **Warning**: This permanently deletes the S3 bucket, Glue database, and all data.
+
+Without `terraform.tfstate`, `destroy.sh` removes nothing: it prints "No terraform.tfstate found. Nothing to destroy." and exits. If the state is gone, or the lab was deployed from another clone, delete the resources by hand, then check that none are left. On 2026-11-05, after the cleanup in [#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70), these lists were empty:
+
+```bash
+aws glue list-crawlers --region ap-northeast-2
+aws glue get-databases --region ap-northeast-2 --query 'DatabaseList[].Name'
+aws s3api list-buckets --query 'Buckets[?starts_with(Name, `chc-`)].Name'
+aws iam list-roles --query 'Roles[?contains(RoleName, `chc-glue`)].RoleName'
+```
+
+A deployment from code before `bb9c885` (2025-11-16) has a bucket named `chc-iceberg-data-<account_id>`, two more crawlers (`chc-glue-integration-csv-crawler`, `chc-glue-integration-parquet-crawler`), and an iceberg crawler that runs every 5 minutes until it is deleted.
 
 ### Key Features
 
@@ -515,10 +530,21 @@ IAM 작업에서 권한 거부(permission denied) 오류가 보인다면:
 ```
 
 이 스크립트는 다음을 합니다.
-- 모든 AWS 리소스 삭제 (S3 버킷, Glue 데이터베이스, 크롤러, IAM 역할)
+- 이 폴더의 `terraform.tfstate`에 기록된 리소스(S3 버킷, Glue 데이터베이스, 크롤러, IAM 역할)에 `terraform destroy` 실행
 - 선택적으로 로컬 Terraform state 파일 정리
 
 ⚠️ **경고**: S3 버킷, Glue 데이터베이스와 모든 데이터가 영구적으로 삭제됩니다.
+
+`terraform.tfstate`가 없으면 `destroy.sh`는 아무것도 지우지 않고, "No terraform.tfstate found. Nothing to destroy."를 출력하고 끝납니다. state가 없어졌거나 다른 클론에서 배포했다면 리소스를 직접 지운 뒤 남은 것이 없는지 확인하세요. 2026-11-05 [#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)에서 정리한 뒤에는 아래 목록이 모두 비어 있었습니다.
+
+```bash
+aws glue list-crawlers --region ap-northeast-2
+aws glue get-databases --region ap-northeast-2 --query 'DatabaseList[].Name'
+aws s3api list-buckets --query 'Buckets[?starts_with(Name, `chc-`)].Name'
+aws iam list-roles --query 'Roles[?contains(RoleName, `chc-glue`)].RoleName'
+```
+
+`bb9c885`(2025-11-16) 이전 코드로 배포했다면 버킷 이름이 `chc-iceberg-data-<account_id>`이고, 크롤러가 두 개 더 있으며(`chc-glue-integration-csv-crawler`, `chc-glue-integration-parquet-crawler`), iceberg 크롤러는 지울 때까지 5분마다 돕니다.
 
 ### 주요 기능
 
