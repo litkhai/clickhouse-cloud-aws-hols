@@ -13,6 +13,8 @@
 >
 > Found 2026-11-05 — a deployment from 2025-11-16 was still in the account ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)). It came from code older than `bb9c885`, which used other names: the bucket `chc-iceberg-data-<account_id>`, and the crawlers `chc-glue-integration-csv-crawler` and `chc-glue-integration-parquet-crawler` beside the iceberg one. Its iceberg crawler had the schedule `cron(0/5 * * * ? *)` and ran every 5 minutes for almost a year without creating a table. The lab folder had no `terraform.tfstate`, and without one `destroy.sh` prints "No terraform.tfstate found. Nothing to destroy." and exits. Everything was deleted with the AWS CLI on 2026-11-05; *Cleanup* shows how to check for leftovers. The current `main.tf` sets no crawler schedule. Nothing was re-run.
 >
+> Not checked — cost. *Cost (AWS side)* below was added on 2026-11-05 from the AWS pricing page and the CloudTrail record of another lab's run. Not measured: Glue calls for repeated queries and for listing, S3 requests per query, and what the crawler adds ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+>
 > **마지막 검증: 2025-11-17** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
 > 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
 > AWS provider: `~> 5.0`은 마지막 5.x인 5.100.0으로 잡힘. 6.x에서는 실행한 적 없음 (최신 6.67.0, 2026-10-04 Terraform Registry API로 확인).
@@ -25,6 +27,8 @@
 > - 문서는 이 연동을 Beta로 표시하고 `SET allow_database_glue_catalog = 1;`을 실행하라고 합니다. `deploy.sh`와 `outputs.tf`가 출력하는 SQL에는 이 설정이 없습니다.
 >
 > 2026-11-05 발견 — 2025-11-16에 배포한 리소스가 계정에 그대로 남아 있었습니다 ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)). `bb9c885` 이전 코드로 만든 것이라 이름이 다릅니다. 버킷은 `chc-iceberg-data-<account_id>`이고, iceberg 크롤러 옆에 `chc-glue-integration-csv-crawler`와 `chc-glue-integration-parquet-crawler`가 더 있었습니다. iceberg 크롤러에는 `cron(0/5 * * * ? *)` 스케줄이 걸려 있어서 1년 가까이 5분마다 돌았고, 테이블은 하나도 만들지 않았습니다. 실습 폴더에 `terraform.tfstate`가 없었는데, 이 파일이 없으면 `destroy.sh`는 "No terraform.tfstate found. Nothing to destroy."를 출력하고 끝납니다. 2026-11-05에 AWS CLI로 모두 지웠습니다. 남은 리소스를 확인하는 방법은 *정리*에 있습니다. 지금 `main.tf`에는 크롤러 스케줄이 없습니다. 다시 실행하지는 않았습니다.
+>
+> 확인 안 된 것 — 비용. 아래 *비용 (AWS 쪽)*은 2026-11-05에 AWS 요금 페이지와 다른 실습을 실행한 CloudTrail 기록을 보고 썼습니다. 측정하지 않은 것: 반복 쿼리와 목록 조회의 Glue 호출, 쿼리당 S3 요청, 크롤러가 더하는 것 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
 
 [English](#english) | [한국어](#한국어)
 
@@ -162,6 +166,46 @@ terraform output clickhouse_connection_info
 | Glue Crawler | `chc-glue-integration-iceberg-crawler` | Auto-discovers tables |
 | IAM Role | `chc-glue-integration-glue-crawler-role` | Crawler permissions |
 | Sample Table | `sales_orders` | Demo Iceberg table with 10 rows |
+
+### Cost (AWS side)
+
+This section covers what federating with `DataLakeCatalog` (`catalog_type = 'glue'`) costs in AWS. ClickHouse Cloud compute is billed separately and is not covered here. Each figure says where it comes from ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+
+**Glue prices.** Vendor doc: [AWS Glue pricing](https://aws.amazon.com/glue/pricing/), read 2026-11-05. The Asia Pacific (Seoul) prices come from the page's price data, published 2026-10-12, and are the same as US East (N. Virginia).
+
+| Item | Free each month | Then |
+|---|---|---|
+| Data Catalog storage. One object is a table, table version, partition, partition index, statistics, database or catalog. | 1 million objects | $1.00 per 100,000 objects a month |
+| Data Catalog requests. The page names `GetTable`, `GetPartitions` and `CreateTable` among them. | 1 million requests | $1.00 per million |
+| Crawler | — | $0.44 per DPU-hour, billed per second, 10-minute minimum per run |
+| Iceberg table optimization (compaction) | — | $0.44 per DPU-hour, billed per second, 1-minute minimum per run |
+
+**Glue calls from ClickHouse.** Measured from the CloudTrail event history of a run of [labs/postgres/aurora-analytics-pg-clickhouse](../../postgres/aurora-analytics-pg-clickhouse/) on 2026-10-09: ClickHouse Cloud 26.6.1, ap-northeast-2, authenticating with `aws_role_arn`, user agent `aws-sdk-cpp`. This lab was not measured. It last ran on ClickHouse Cloud 25.8 with access keys.
+
+| What ClickHouse ran | Glue calls |
+|---|---|
+| `CREATE DATABASE … ENGINE = DataLakeCatalog` and `SHOW TABLES` | `GetDatabases` 2, `GetTables` 4. The account had 2 Glue databases. |
+| `SELECT count()` on each of 24 tables, once each | `GetTable` 24, one per query |
+
+**What this means.** Each point below is worked out from the two tables above; none of it was measured.
+
+- **Catalog size.** A lab-sized catalog, with one database and a few tables, stays inside both free tiers.
+- **Requests.** At one `GetTable` per query, a million table reads a month cost nothing, and each further million costs $1.00. The free requests are shared with every other caller in the account. In the same 2026-10-09 run, Aurora's `aurora_analytics` made 3,620 `GetTable` calls, against 24 from ClickHouse.
+- **Crawler.** The crawler is the item that keeps costing money when nobody queries. Each run is billed for at least 10 minutes.
+  - Run once, as `deploy.sh` does, a run shorter than 10 minutes costs about $0.07 at 1 DPU. The AWS API does not show how many DPUs a crawler uses.
+  - On a 5-minute schedule, 288 runs a day come to 48 DPU-hours, about $21 a day at 1 DPU. A deployment from before `bb9c885` ran like that for almost a year ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)).
+  - This lab's code sets no schedule.
+- **Registering without a crawler.** An engine that writes Iceberg through the Glue catalog registers its tables itself.
+  - Here, `scripts/create-iceberg-table.py` registers `sales_orders` with PyIceberg (`catalog.create_table`) before `deploy.sh` starts the crawler.
+  - In the 2026-10-09 run, CloudTrail shows `CreateTable` from Athena for all 24 tables, with no crawler.
+  - What the crawler adds here after PyIceberg was not checked.
+
+**Not checked.** These have no figures yet ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)):
+
+- **Cache.** How many `GetTable` calls the same query makes when it runs N times, and how many a join of k tables makes.
+- **Listing.** How many `GetTables` calls `SHOW TABLES` and `system.tables` make on a catalog with many tables.
+- **S3 requests per query.** Reads of `metadata.json`, the manifest list, the manifests and the data files, taken from `system.query_log` `ProfileEvents`. S3 rates were not read for this section.
+- **Counted requests.** Whether `GetTables` and `GetDatabases` count as catalog requests. The page links a full list, which was not read.
 
 ### Configuration
 
@@ -431,6 +475,46 @@ terraform output clickhouse_connection_info
 | Glue 크롤러 | `chc-glue-integration-iceberg-crawler` | 테이블 자동 탐색 |
 | IAM 역할 | `chc-glue-integration-glue-crawler-role` | 크롤러 권한 |
 | 샘플 테이블 | `sales_orders` | 10개 행이 있는 데모 Iceberg 테이블 |
+
+### 비용 (AWS 쪽)
+
+`DataLakeCatalog`(`catalog_type = 'glue'`)로 페더레이션할 때 AWS 쪽에서 드는 비용입니다. ClickHouse Cloud 컴퓨팅 비용은 따로 청구되며 여기서 다루지 않습니다. 수치마다 출처를 적었습니다 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+
+**Glue 요금.** 벤더 문서: [AWS Glue 요금](https://aws.amazon.com/glue/pricing/), 2026-11-05에 읽음. 아시아 태평양(서울) 단가는 이 페이지의 가격 데이터(2026-10-12 게시)에서 가져왔고, 미국 동부(버지니아 북부)와 같습니다.
+
+| 항목 | 매달 무료 | 초과분 |
+|---|---|---|
+| Data Catalog 저장. 테이블, 테이블 버전, 파티션, 파티션 인덱스, 통계, 데이터베이스, 카탈로그가 각각 객체 하나입니다. | 객체 100만 개 | 객체 10만 개당 월 $1.00 |
+| Data Catalog 요청. 페이지는 `GetTable`, `GetPartitions`, `CreateTable`을 예로 듭니다. | 요청 100만 건 | 100만 건당 $1.00 |
+| 크롤러 | — | DPU-시간당 $0.44. 초 단위로 과금하고, 실행 1회에 최소 10분 |
+| Iceberg 테이블 최적화(compaction) | — | DPU-시간당 $0.44. 초 단위로 과금하고, 실행 1회에 최소 1분 |
+
+**ClickHouse가 보내는 Glue 호출.** [labs/postgres/aurora-analytics-pg-clickhouse](../../postgres/aurora-analytics-pg-clickhouse/)를 2026-10-09에 실행한 기록을 CloudTrail 이벤트 기록에서 측정했습니다. 그 실행은 ClickHouse Cloud 26.6.1, ap-northeast-2, `aws_role_arn` 인증, user agent `aws-sdk-cpp`였습니다. 이 실습은 측정하지 않았습니다. 이 실습은 ClickHouse Cloud 25.8에서 액세스 키로 마지막으로 실행했습니다.
+
+| ClickHouse에서 실행한 것 | Glue 호출 |
+|---|---|
+| `CREATE DATABASE … ENGINE = DataLakeCatalog`와 `SHOW TABLES` | `GetDatabases` 2건, `GetTables` 4건. 계정에 Glue 데이터베이스가 2개 있었습니다. |
+| 테이블 24개에 `SELECT count()`를 한 번씩 | `GetTable` 24건, 쿼리마다 1건 |
+
+**의미.** 아래 항목은 모두 위 두 표에서 계산한 것이고, 측정한 것이 아닙니다.
+
+- **카탈로그 크기.** 데이터베이스 하나에 테이블 몇 개인 실습 규모 카탈로그는 두 무료 구간 안에 들어갑니다.
+- **요청.** 쿼리 하나에 `GetTable` 1건이라면 한 달에 테이블 읽기 100만 번까지 무료이고, 그다음부터 100만 번마다 $1.00입니다. 무료 요청은 계정 안의 다른 호출자와 함께 씁니다. 같은 2026-10-09 실행에서 Aurora `aurora_analytics`는 `GetTable`을 3,620건 호출했고, ClickHouse는 24건이었습니다.
+- **크롤러.** 아무도 조회하지 않아도 계속 돈이 나가는 항목은 크롤러입니다. 실행 1회마다 최소 10분이 과금됩니다.
+  - `deploy.sh`처럼 한 번만 돌리면, 10분이 안 걸리는 실행은 1 DPU 기준 약 $0.07입니다. 크롤러가 DPU를 몇 개 쓰는지는 AWS API에 나오지 않습니다.
+  - 5분 스케줄이면 하루 288회로 48 DPU-시간이 되고, 1 DPU 기준 하루 약 $21입니다. `bb9c885` 이전에 배포한 리소스가 1년 가까이 이렇게 돌았습니다 ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)).
+  - 이 실습 코드에는 스케줄이 없습니다.
+- **크롤러 없이 등록하기.** Glue 카탈로그를 통해 Iceberg를 쓰는 엔진은 테이블을 직접 등록합니다.
+  - 이 실습에서는 `deploy.sh`가 크롤러를 시작하기 전에 `scripts/create-iceberg-table.py`가 PyIceberg(`catalog.create_table`)로 `sales_orders`를 등록합니다.
+  - 2026-10-09 실행에서는 CloudTrail에 Athena의 `CreateTable`이 24개 테이블 모두에 대해 남아 있고, 크롤러는 없었습니다.
+  - PyIceberg로 등록한 뒤 이 실습의 크롤러가 무엇을 더하는지는 확인하지 않았습니다.
+
+**확인 안 된 것.** 아직 수치가 없습니다 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+
+- **캐시.** 같은 쿼리를 N번 실행할 때, 그리고 테이블 k개를 조인할 때 `GetTable`이 몇 건 나가는지
+- **목록 조회.** 테이블이 많은 카탈로그에서 `SHOW TABLES`와 `system.tables`가 `GetTables`를 몇 건 호출하는지
+- **쿼리당 S3 요청.** `metadata.json`, manifest list, manifest, 데이터 파일을 읽는 요청 수를 `system.query_log`의 `ProfileEvents`로 셉니다. 이 절을 쓰면서 S3 요금은 읽지 않았습니다.
+- **과금되는 요청.** `GetTables`와 `GetDatabases`가 카탈로그 요청으로 과금되는지. 페이지에 전체 목록 링크가 있지만 읽지 않았습니다.
 
 ### 설정
 
