@@ -199,12 +199,6 @@ Federating with `DataLakeCatalog` (`catalog_type = 'glue'`) costs AWS money main
 - **Counted requests.** Whether `GetTables` and `GetDatabases` count as catalog requests. The page links a full list, which was not read.
 - **S3 requests per query.** Reads of `metadata.json`, the manifest list, the manifests and the data files, taken from `system.query_log` `ProfileEvents`. S3 rates were not read for this section.
 
-**Crawlers are billed separately.** A crawler is not an API-call cost. The same page bills it at $0.44 per DPU-hour, per second, with a 10-minute minimum per run.
-
-- Run once, as `deploy.sh` does, a run under 10 minutes costs about $0.07 at 1 DPU. The AWS API does not show how many DPUs a crawler uses.
-- On a 5-minute schedule it costs about $21 a day at 1 DPU. A deployment from before `bb9c885` ran like that for almost a year ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)).
-- This lab's code sets no schedule. `scripts/create-iceberg-table.py` registers the table with PyIceberg (`catalog.create_table`) before the crawler starts.
-
 ### Configuration
 
 AWS credentials are provided via environment variables (not stored in files):
@@ -505,12 +499,6 @@ terraform output clickhouse_connection_info
 - **큰 카탈로그의 목록 조회.** 테이블이 많은 카탈로그에서 `SHOW TABLES`와 `system.tables`가 `GetTables`를 몇 건 호출하는지. BI 도구는 목록을 자주 조회합니다.
 - **과금되는 요청.** `GetTables`와 `GetDatabases`가 카탈로그 요청으로 과금되는지. 페이지에 전체 목록 링크가 있지만 읽지 않았습니다.
 - **쿼리당 S3 요청.** `metadata.json`, manifest list, manifest, 데이터 파일을 읽는 요청 수를 `system.query_log`의 `ProfileEvents`로 셉니다. 이 절을 쓰면서 S3 요금은 읽지 않았습니다.
-
-**크롤러는 따로 과금됩니다.** 크롤러는 API 호출 비용이 아닙니다. 같은 페이지 기준으로 DPU-시간당 $0.44를 초 단위로 과금하고, 실행 1회에 최소 10분이 과금됩니다.
-
-- `deploy.sh`처럼 한 번만 돌리면, 10분이 안 걸리는 실행은 1 DPU 기준 약 $0.07입니다. 크롤러가 DPU를 몇 개 쓰는지는 AWS API에 나오지 않습니다.
-- 5분 스케줄이면 1 DPU 기준 하루 약 $21입니다. `bb9c885` 이전에 배포한 리소스가 1년 가까이 이렇게 돌았습니다 ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)).
-- 이 실습 코드에는 스케줄이 없습니다. `scripts/create-iceberg-table.py`가 크롤러보다 먼저 PyIceberg(`catalog.create_table`)로 테이블을 등록합니다.
 
 ### 설정
 
