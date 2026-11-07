@@ -1,14 +1,16 @@
 # ClickHouse Cloud on every request, or a cache in front? — Valkey (ElastiCache) and DynamoDB
 
-> **Not run yet.** Written 2026-11-07 for [#75](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/75).
-> Checked so far: `terraform validate` (AWS provider 5.100.0), `bash -n` on every script, `go vet` / `go test` /
-> `go build` of `cachebench`. Nothing here has run against AWS or ClickHouse Cloud; every expectation below is a
-> hypothesis until `RESULTS.md` exists.
+> **Run on 2026-11-07** (deploy → run3 → destroy, AWS provider 5.100.0, ElastiCache for Valkey 8.1, ClickHouse
+> Cloud 26.8.1 — an existing autoscaling service shared with other workloads, 2 replicas, 9 → 30 vCPU per replica
+> during the run). Every scenario ran once: floor, S1, S2, S3, 80 runs. Results: [RESULTS.md](RESULTS.md).
+> Server-side stats are missing for most of S1 (replicas replaced while autoscaling). Not run: a fixed-size service.
+> Changed since without a re-run: `cachebench` stats query adds `skip_unavailable_shards = 1`.
 >
-> **아직 실행 안 함.** 2026-11-07 [#75](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/75)용으로 작성.
-> 지금까지 확인한 것: `terraform validate`(AWS provider 5.100.0), 모든 스크립트 `bash -n`, `cachebench`의
-> `go vet` / `go test` / `go build`. AWS나 ClickHouse Cloud에서 실행한 것은 없고, 아래 예상은 `RESULTS.md`가
-> 생기기 전까지 가설입니다.
+> **2026-11-07 실행**(deploy → run3 → destroy, AWS provider 5.100.0, ElastiCache for Valkey 8.1, ClickHouse Cloud
+> 26.8.1 — 다른 워크로드와 함께 쓰는 기존 오토스케일링 서비스, 레플리카 2개, 실행 중 레플리카당 9 → 30 vCPU).
+> 모든 시나리오를 한 번씩 실행: 바닥, S1, S2, S3, 80회. 결과는 [RESULTS.md](RESULTS.md). S1 대부분은 서버 측 통계가
+> 없습니다(오토스케일링 중 레플리카 교체). 실행 안 함: 고정 크기 서비스. 재실행 없이 바뀐 것: `cachebench` 통계
+> 쿼리에 `skip_unavailable_shards = 1` 추가.
 
 [English](#english) | [한국어](#한국어)
 
@@ -68,6 +70,8 @@ reads and writes, CPU). Result lines: `results/<stamp>/*.jsonl`, tables: `40-rep
 - One region; client and Valkey in one AZ. ClickHouse Cloud through its public endpoint (no
   PrivateLink), DynamoDB through a gateway endpoint. TLS on all three.
 - Cache-aside writes inline: a miss's latency includes the `SET` / `PutItem`.
+- Every request has a 10 s limit on both sides (`--timeout`, and `max_execution_time` on ClickHouse), so
+  an abandoned query does not keep running on the server.
 - DynamoDB's TTL deletes expired items in the background with a delay (AWS: typically within a
   few days), so `ddb-aside` treats an item whose `exp` has passed as a miss.
 - DynamoDB items are limited to 400 KB; S1 answers carry `LIMIT 100`, and a larger body is not
@@ -98,6 +102,7 @@ chmod 600 ch.env
 ./20-push.sh           # build, send, floor check from the client
 ./30-run.sh all        # whole matrix in the background (≈ 1 h 40 min); or one phase: floor|s1|kv|s2|s3
 ./31-fetch.sh <stamp>  # copy results; repeat until matrix.log says "done all"
+./35-server-stats.sh <stamp> '<from UTC>' '<to UTC>'   # server stats from query_log, when the in-run query failed
 python3 40-report.py results/<stamp> > results/<stamp>/REPORT.md
 ```
 
@@ -128,6 +133,7 @@ aggregation, client-side caches, the cost of the AWS resources.
 | `10-ch-setup.sh`, `90-ch-cleanup.sh` | create and load / drop on the service |
 | `cachebench/` | the load generator (`spec.md` is its design) |
 | `20-push.sh`, `matrix.sh`, `30-run.sh`, `31-fetch.sh` | send, run matrix on the client, fetch |
+| `35-server-stats.sh` | per-run server stats read afterwards from `query_log` on every replica |
 | `40-report.py` | result lines → markdown tables |
 
 ---
@@ -178,6 +184,8 @@ ClickHouse 요청마다 실행 ID를 `log_comment`로 붙이고, 실행이 끝�
 - 한 리전, 클라이언트와 Valkey는 같은 AZ. ClickHouse Cloud는 공개 엔드포인트(PrivateLink 없음),
   DynamoDB는 게이트웨이 엔드포인트. 셋 다 TLS.
 - cache-aside는 바로 씁니다. 미스의 지연에 `SET` / `PutItem`이 포함됩니다.
+- 모든 요청은 양쪽에서 10초 제한이 있습니다(`--timeout`, ClickHouse의 `max_execution_time`). 포기한 쿼리가
+  서버에서 계속 돌지 않게 하기 위해서입니다.
 - DynamoDB TTL은 만료된 항목을 백그라운드에서 늦게 지웁니다(AWS: 보통 며칠 안). 그래서 `ddb-aside`는
   `exp`가 지난 항목을 미스로 봅니다.
 - DynamoDB 항목은 400 KB 제한이 있습니다. S1 응답은 `LIMIT 100`이고, 더 큰 본문은 캐시하지 않습니다

@@ -9,6 +9,9 @@ load_config
 
 PHASE=${1:?usage: ./30-run.sh floor|s1|kv|s2|s3|all [stamp]}
 STAMP=${2:-$(date -u +%Y%m%dT%H%M%SZ)}
-ssm_run 60 "cd /opt/cachebench && mkdir -p results/$STAMP && \
-nohup ./matrix.sh $PHASE $STAMP > results/$STAMP/nohup-$PHASE.log 2>&1 < /dev/null & echo started $PHASE $STAMP pid \$!"
+# A transient systemd unit: SSM kills a nohup'd child when its command ends or times out.
+ssm_run 60 "mkdir -p /opt/cachebench/results/$STAMP && \
+systemd-run --unit cachelab-$PHASE-$STAMP --collect --working-directory=/opt/cachebench \
+  -p StandardOutput=append:/opt/cachebench/results/$STAMP/unit-$PHASE.log -p StandardError=inherit \
+  /opt/cachebench/matrix.sh $PHASE $STAMP && echo started cachelab-$PHASE-$STAMP"
 echo "follow: ./31-fetch.sh $STAMP"

@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// reqTimeout bounds every request (cache, ClickHouse, DynamoDB); set by run --timeout.
+var reqTimeout = 10 * time.Second
+
 type opFn func(ctx context.Context) ([]byte, error)
 
 // worker holds per-goroutine state; merged after the loop (no locks on the hot path).
@@ -77,7 +80,7 @@ func runLoop(cfg loopCfg, mk func(w *worker) opFn) *agg {
 				if w.rec {
 					w.sec = min(int(now.Sub(recStart)/time.Second), secs-1)
 				}
-				octx, c := context.WithTimeout(context.Background(), 35*time.Second)
+				octx, c := context.WithTimeout(context.Background(), reqTimeout)
 				body, err := op(octx)
 				fin := time.Now()
 				c()

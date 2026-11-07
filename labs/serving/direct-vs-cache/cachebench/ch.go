@@ -151,6 +151,8 @@ func firstRow(body []byte) (map[string]any, error) {
 
 func extraFor(arm string, ttl int) url.Values {
 	v := url.Values{}
+	// Stop the query on the server when the client gives up, so abandoned queries do not pile up.
+	v.Set("max_execution_time", fmt.Sprint(max(1, int(reqTimeout.Seconds()))))
 	if arm == "ch-qc" {
 		v.Set("use_query_cache", "1")
 		v.Set("query_cache_ttl", fmt.Sprint(ttl))

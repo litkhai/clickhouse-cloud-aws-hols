@@ -1,0 +1,24 @@
+{"at":"2026-11-07 04:15:04","before":"floor --conc 1 --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:15:04","before":"floor --conc 1 --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:18:05","before":"floor --conc 16 --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:18:05","before":"floor --conc 16 --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:21:06","before":"run --scenario s1 --arm ch --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:21:06","before":"run --scenario s1 --arm ch --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:22:30","before":"run --scenario s1 --arm ch --conc 32 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:22:30","before":"run --scenario s1 --arm ch --conc 32 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:23:59","before":"run --scenario s1 --arm ch --conc 128 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:23:59","before":"run --scenario s1 --arm ch --conc 128 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:25:31","before":"run --scenario s1 --arm ch-qc --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:25:31","before":"run --scenario s1 --arm ch-qc --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:27:00","before":"run --scenario s1 --arm ch-qc --conc 32 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:27:00","before":"run --scenario s1 --arm ch-qc --conc 32 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:28:32","before":"run --scenario s1 --arm ch-qc --conc 128 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:28:32","before":"run --scenario s1 --arm ch-qc --conc 128 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:30:05","before":"run --scenario s1 --arm vk-aside --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:30:05","before":"run --scenario s1 --arm vk-aside --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:31:38","before":"run --scenario s1 --arm vk-aside --conc 32 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:31:38","before":"run --scenario s1 --arm vk-aside --conc 32 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:33:10","before":"run --scenario s1 --arm vk-aside --conc 128 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:33:10","before":"run --scenario s1 --arm vk-aside --conc 128 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:34:43","before":"run --scenario s1 --arm ddb-aside --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-6","cpus":9,"mem_gib":36}
+{"at":"2026-11-07 04:34:43","before":"run --scenario s1 --arm ddb-aside --conc 8 --space 100 --ttl 60 --warmup 10s --duration 60s","replica":"replica-7","cpus":9,"mem_gib":36}

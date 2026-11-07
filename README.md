@@ -51,7 +51,7 @@ These labs are kept, not archived, but most have not been re-run since late 2025
 
 | Lab | What it covers | Last run |
 |-----|----------------|----------|
-| [labs/serving/direct-vs-cache](labs/serving/direct-vs-cache/) | ClickHouse Cloud queried on every request at high QPS vs a cache in front: query cache, pre-aggregated tables, ElastiCache for Valkey and DynamoDB (cache-aside and as the serving store), for ad-hoc aggregation, point lookups and a hot dashboard with live inserts | not run yet |
+| [labs/serving/direct-vs-cache](labs/serving/direct-vs-cache/) | ClickHouse Cloud queried on every request at high QPS vs a cache in front: query cache, pre-aggregated tables, ElastiCache for Valkey and DynamoDB (cache-aside and as the serving store), for ad-hoc aggregation, point lookups and a hot dashboard with live inserts | 2026-11-07 (shared autoscaling service; S1 server stats partial) |
 
 ### 🔗 Related repositories
 
@@ -129,7 +129,7 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 
 | 실습 | 내용 | 마지막 실행 |
 |-----|----------------|----------|
-| [labs/serving/direct-vs-cache](labs/serving/direct-vs-cache/) | 높은 QPS에서 요청마다 ClickHouse Cloud에 질의 vs 앞단 캐시: 쿼리 캐시, 사전 집계 테이블, ElastiCache for Valkey·DynamoDB(cache-aside와 서빙 저장소), 애드혹 집계·포인트 조회·실시간 적재 중인 대시보드 | 아직 실행 안 함 |
+| [labs/serving/direct-vs-cache](labs/serving/direct-vs-cache/) | 높은 QPS에서 요청마다 ClickHouse Cloud에 질의 vs 앞단 캐시: 쿼리 캐시, 사전 집계 테이블, ElastiCache for Valkey·DynamoDB(cache-aside와 서빙 저장소), 애드혹 집계·포인트 조회·실시간 적재 중인 대시보드 | 2026-11-07 (공유 오토스케일링 서비스, S1 서버 통계 일부) |
 
 ### 🔗 관련 저장소
 

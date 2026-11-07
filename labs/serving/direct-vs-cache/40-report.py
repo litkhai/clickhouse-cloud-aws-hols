@@ -11,14 +11,36 @@ import sys
 from pathlib import Path
 
 
+POSTHOC = {}
+
+
 def load(d, name):
     p = d / f"{name}.jsonl"
     if not p.exists():
         return []
-    return [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    rows = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    for r in rows:  # in-run stats missing → the ones 35-server-stats.sh read afterwards
+        if not r.get("server") and r.get("run_id") in POSTHOC:
+            r["server"] = POSTHOC[r["run_id"]]
+            r["server_from"] = "posthoc"
+    return rows
+
+
+def num(v):
+    """ClickHouse JSON quotes 64-bit integers; turn numeric strings back into numbers."""
+    if isinstance(v, str):
+        try:
+            return int(v)
+        except ValueError:
+            try:
+                return float(v)
+            except ValueError:
+                return v
+    return v
 
 
 def f(v, nd=1):
+    v = num(v)
     if v is None or v == "":
         return "–"
     if isinstance(v, float):
@@ -56,6 +78,12 @@ def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     d = Path(sys.argv[1])
+    ph = d / "server-posthoc.jsonl"
+    if ph.exists():
+        for line in ph.read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                POSTHOC[r["run_id"]] = r
     print(f"# Results {d.name}\n")
 
     rs = load(d, "floor")
@@ -101,7 +129,7 @@ def main():
                       per_s(r), f(r.get("backend_peak_per_s")),
                       f((r.get("staleness_s") or {}).get("p50"), 1), f((r.get("staleness_s") or {}).get("p99"), 1),
                       srv(r, "qc_read"),
-                      f(((r.get("server") or {}).get("cpu_us") or 0) / 1e6, 1), errs(r)] for r in rs]))
+                      f(num((r.get("server") or {}).get("cpu_us") or 0) / 1e6, 1), errs(r)] for r in rs]))
 
 
 if __name__ == "__main__":

@@ -4,3 +4,4 @@ ch.env
 terraform.tfvars
 .terraform/
 cachebench/bin/
+captures/

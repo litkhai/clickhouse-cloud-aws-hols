@@ -20,8 +20,19 @@ S3_CACHED=${S3_CACHED:-"ch-qc vk-aside ddb-aside"}; S3_TTL=${S3_TTL:-"5 60"}; S3
 sync_out() { aws s3 sync --quiet "$OUT" "s3://$BUCKET/results/$STAMP/"; }
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$OUT/matrix.log"; }
 
+# Size of every replica right before a run (the service may autoscale between runs).
+sizing() {
+  curl -s -u "$CH_USER:$CH_PASSWORD" "$CH_URL/?default_format=JSONEachRow" --data-binary \
+    "SELECT now() AS at, '$1' AS before, hostname() AS replica,
+            anyIf(value, metric = 'CGroupMaxCPU') AS cpus,
+            round(anyIf(value, metric = 'CGroupMemoryTotal') / pow(2, 30), 1) AS mem_gib
+     FROM clusterAllReplicas(default, system.asynchronous_metrics)
+     WHERE metric IN ('CGroupMaxCPU', 'CGroupMemoryTotal') GROUP BY replica" >> "$OUT/sizing.jsonl" || true
+}
+
 run() {  # run <phase file> <cachebench args...>
   local f="$OUT/$1.jsonl"; shift
+  sizing "$*"
   log "start $*"
   ./cachebench "$@" --out "$f" >>"$OUT/stdout.log" 2>>"$OUT/stderr.log" || log "FAILED ($?) $*"
   sync_out

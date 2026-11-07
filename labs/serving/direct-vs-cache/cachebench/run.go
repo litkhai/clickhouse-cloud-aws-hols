@@ -80,6 +80,7 @@ func cmdRun(args []string) int {
 	conc := fs.Int("conc", 16, "closed-loop workers")
 	dur := fs.Duration("duration", 60*time.Second, "recorded window")
 	warm := fs.Duration("warmup", 10*time.Second, "warmup (not recorded)")
+	tmo := fs.Duration("timeout", reqTimeout, "per-request timeout (a timed-out request counts as an error)")
 	ttl := fs.Int("ttl", 60, "cache TTL in seconds")
 	runID := fs.String("run-id", "", "run id (default <scenario>-<arm>-c<N>-<utc time>)")
 	out := fs.String("out", "", "append the result line to this file")
@@ -91,6 +92,10 @@ func cmdRun(args []string) int {
 	if code, done := parseFlags(fs, args); done {
 		return code
 	}
+	if *tmo <= 0 {
+		return fail("--timeout must be > 0")
+	}
+	reqTimeout = *tmo
 	if armsByScenario[*scn] == nil {
 		return fail("--scenario must be one of s1, s2, s3 (got %q)", *scn)
 	}
@@ -282,7 +287,13 @@ func cmdRun(args []string) int {
 	}
 
 	time.Sleep(10 * time.Second)
-	r.Server, r.ServerError = serverStats(ctx, ch, *runID)
+	for attempt := 1; attempt <= 3; attempt++ {
+		r.Server, r.ServerError = serverStats(ctx, ch, *runID)
+		if r.ServerError == "" {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
 
 	if err := emit(*out, r); err != nil {
 		return fail("writing result: %v", err)
@@ -296,7 +307,8 @@ func serverStats(ctx context.Context, ch *CH, runID string) (map[string]any, str
  countIf(query_cache_usage = 'Read') AS qc_read, countIf(query_cache_usage = 'Write') AS qc_write,
  sum(ProfileEvents['OSCPUVirtualTimeMicroseconds']) AS cpu_us, uniqExact(hostname) AS replicas
 FROM clusterAllReplicas(default, system.query_log)
-WHERE event_date >= today() - 1 AND log_comment = '%s' AND type = 'QueryFinish'`, runID)
+WHERE event_date >= today() - 1 AND log_comment = '%s' AND type = 'QueryFinish'
+ SETTINGS max_execution_time = 30, skip_unavailable_shards = 1`, runID)
 	b, err := ch.Query(ctx, sql, runID+"-stats", nil)
 	if err != nil {
 		return nil, err.Error()
