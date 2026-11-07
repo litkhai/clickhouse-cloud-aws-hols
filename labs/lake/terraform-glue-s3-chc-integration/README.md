@@ -13,7 +13,7 @@
 >
 > Found 2026-11-05 — a deployment from 2025-11-16 was still in the account ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)). It came from code older than `bb9c885`, which used other names: the bucket `chc-iceberg-data-<account_id>`, and the crawlers `chc-glue-integration-csv-crawler` and `chc-glue-integration-parquet-crawler` beside the iceberg one. Its iceberg crawler had the schedule `cron(0/5 * * * ? *)` and ran every 5 minutes for almost a year without creating a table. The lab folder had no `terraform.tfstate`, and without one `destroy.sh` prints "No terraform.tfstate found. Nothing to destroy." and exits. Everything was deleted with the AWS CLI on 2026-11-05; *Cleanup* shows how to check for leftovers. The current `main.tf` sets no crawler schedule. Nothing was re-run.
 >
-> Not checked — cost. *Cost (AWS side)* below was added on 2026-11-05 from the AWS pricing page and the CloudTrail record of another lab's run. Not measured: Glue calls for repeated queries and for listing, which calls count as requests, and S3 requests per query ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+> Measured 2026-11-07 — cost, on ClickHouse Cloud 26.8.1.608 (2 replicas, ap-northeast-2) with [cost-measure/](cost-measure/), not with this lab's stack. *Cost (AWS side)* below has the figures: no Glue cache across queries (one `GetTable` per catalog table per query), S3 requests per query, listing, and Athena registration without a crawler. Still not checked: which Glue calls AWS bills (its pages do not say), and listing larger catalogs ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
 >
 > **마지막 검증: 2025-11-17** — 실습을 실행하며 남긴 마지막 커밋 날짜 (별도 실행 기록은 없음). AWS provider `~> 5.0`.
 > 그 뒤 코드 변경 없음 — 문서와 라이선스 수정만 있었음.
@@ -28,7 +28,7 @@
 >
 > 2026-11-05 발견 — 2025-11-16에 배포한 리소스가 계정에 그대로 남아 있었습니다 ([#70](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/70)). `bb9c885` 이전 코드로 만든 것이라 이름이 다릅니다. 버킷은 `chc-iceberg-data-<account_id>`이고, iceberg 크롤러 옆에 `chc-glue-integration-csv-crawler`와 `chc-glue-integration-parquet-crawler`가 더 있었습니다. iceberg 크롤러에는 `cron(0/5 * * * ? *)` 스케줄이 걸려 있어서 1년 가까이 5분마다 돌았고, 테이블은 하나도 만들지 않았습니다. 실습 폴더에 `terraform.tfstate`가 없었는데, 이 파일이 없으면 `destroy.sh`는 "No terraform.tfstate found. Nothing to destroy."를 출력하고 끝납니다. 2026-11-05에 AWS CLI로 모두 지웠습니다. 남은 리소스를 확인하는 방법은 *정리*에 있습니다. 지금 `main.tf`에는 크롤러 스케줄이 없습니다. 다시 실행하지는 않았습니다.
 >
-> 확인 안 된 것 — 비용. 아래 *비용 (AWS 쪽)*은 2026-11-05에 AWS 요금 페이지와 다른 실습을 실행한 CloudTrail 기록을 보고 썼습니다. 측정하지 않은 것: 반복 쿼리와 목록 조회의 Glue 호출, 어떤 호출이 요청으로 과금되는지, 쿼리당 S3 요청 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+> 2026-11-07 측정 — 비용. ClickHouse Cloud 26.8.1.608(레플리카 2개, ap-northeast-2)에서 이 실습의 스택이 아니라 [cost-measure/](cost-measure/)로 측정했습니다. 아래 *비용 (AWS 쪽)*에 수치가 있습니다: 쿼리 사이 Glue 캐시 없음(쿼리마다 카탈로그 테이블 하나당 `GetTable` 1건), 쿼리당 S3 요청, 목록 조회, 크롤러 없는 Athena 등록. 아직 확인 안 된 것: AWS가 어떤 Glue 호출에 과금하는지(AWS 페이지에 없음), 큰 카탈로그의 목록 조회 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
 
 [English](#english) | [한국어](#한국어)
 
@@ -169,35 +169,61 @@ terraform output clickhouse_connection_info
 
 ### Cost (AWS side)
 
-Federating with `DataLakeCatalog` (`catalog_type = 'glue'`) costs AWS money mainly as Glue Data Catalog API calls. ClickHouse Cloud compute is billed separately and is not covered here. Each figure says where it comes from ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+Federating with `DataLakeCatalog` (`catalog_type = 'glue'`) costs AWS money mainly as Glue Data Catalog API calls, plus S3 requests for the Iceberg files. ClickHouse Cloud compute is billed separately and is not covered here. Each figure says where it comes from ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
 
-**Glue calls from ClickHouse.** Measured from the CloudTrail event history of a run of [labs/postgres/aurora-analytics-pg-clickhouse](../../postgres/aurora-analytics-pg-clickhouse/) on 2026-10-09: ClickHouse Cloud 26.6.1, ap-northeast-2, authenticating with `aws_role_arn`, user agent `aws-sdk-cpp`. This lab was not measured. It last ran on ClickHouse Cloud 25.8 with access keys.
+**Glue calls and S3 requests from ClickHouse.** Measured on 2026-11-07 with [cost-measure/](cost-measure/): ClickHouse Cloud 26.8.1.608 with 2 replicas, ap-northeast-2, authenticating with `aws_role_arn`, user agent `aws-sdk-cpp/1.11.771`. The account had one Glue database, holding 40 Iceberg tables written by Athena: `t01` with 200,000 rows and the rest with 100 rows each. Glue calls come from the CloudTrail event history. S3 requests come from `system.query_log` `ProfileEvents` (`S3GetObject`, `S3HeadObject`). The queries ran one at a time, 6 seconds apart.
+
+| What ClickHouse ran | Glue calls | S3 requests (GET + HEAD) |
+|---|---|---|
+| `CREATE DATABASE … ENGINE = DataLakeCatalog` | none | none |
+| `SELECT count()` on one table, 10 times | `GetTable` 1 every time, 10 in all | 4 + 4 the first time on each replica, then 1 + 1 (once 2 + 1) |
+| A join of 3 tables | `GetTable` 3, one per table | 17 + 12 on its first run, which read 200,200 rows |
+| `SHOW TABLES`, 3 times | `GetDatabases` 2 and `GetTables` 2 each time, listing all 40 tables | none |
+| `SELECT … FROM system.tables`, filtered to the catalog and unfiltered | none | none |
+
+`count()` was answered from Iceberg metadata (`read_rows` 1), so those S3 requests are metadata reads, not data files. The `system.tables` query filtered to the catalog returned 0 rows: the catalog's tables do not appear in `system.tables`.
+
+**Earlier run.** Measured from the CloudTrail event history of a run of [labs/postgres/aurora-analytics-pg-clickhouse](../../postgres/aurora-analytics-pg-clickhouse/) on 2026-10-09: ClickHouse Cloud 26.6.1, ap-northeast-2, `aws_role_arn`, user agent `aws-sdk-cpp`. The 2026-11-07 run above gives the same per-query count.
 
 | What ClickHouse ran | Glue calls |
 |---|---|
 | `CREATE DATABASE … ENGINE = DataLakeCatalog` and `SHOW TABLES` | `GetDatabases` 2, `GetTables` 4. The account had 2 Glue databases. |
 | `SELECT count()` on each of 24 tables, once each | `GetTable` 24, one per query |
 
-**Glue Data Catalog prices.** Vendor doc: [AWS Glue pricing](https://aws.amazon.com/glue/pricing/), read 2026-11-05. The Asia Pacific (Seoul) prices come from the page's price data, published 2026-10-12, and are the same as US East (N. Virginia).
+**Registering tables without a crawler.** Athena `CREATE TABLE … AS SELECT` with `table_type = 'ICEBERG'` writes the table and registers it in Glue itself; no crawler ran. CloudTrail showed 6 Glue calls per table from `athena.amazonaws.com` (40 tables, 2026-11-07): `CreateTable` 1, `GetDatabase` 1 and `GetTable` 4. The `GetTable` calls failed with `EntityNotFoundException`, because they check whether the table exists before creating it. These calls use the same free requests as ClickHouse's.
+
+**Prices.** Glue: vendor doc [AWS Glue pricing](https://aws.amazon.com/glue/pricing/), read 2026-11-05. The Asia Pacific (Seoul) prices come from the page's price data, published 2026-10-12, and are the same as US East (N. Virginia). S3: AWS Price List API, S3 Standard requests in ap-northeast-2, published 2026-11-04 and read 2026-11-07.
 
 | Item | Free each month | Then |
 |---|---|---|
-| Requests. The page names `GetTable`, `GetPartitions` and `CreateTable` among them. | 1 million requests | $1.00 per million |
-| Storage. One object is a table, table version, partition, partition index, statistics, database or catalog. | 1 million objects | $1.00 per 100,000 objects a month |
+| Glue requests. The page names `GetTable`, `GetPartitions` and `CreateTable` among them. | 1 million requests | $1.00 per million |
+| Glue storage. One object is a table, table version, partition, partition index, statistics, database or catalog. | 1 million objects | $1.00 per 100,000 objects a month |
+| S3 GET and all other requests, HEAD among them (`APN2-Requests-Tier2`) | none | $0.00035 per 1,000 |
+| S3 PUT, COPY, POST and LIST requests (`APN2-Requests-Tier1`) | none | $0.0045 per 1,000 |
 
-**What this means.** Each point below is worked out from the two tables above; none of it was measured.
+**Which Glue calls are billed.** The pricing page and the [Glue FAQ](https://aws.amazon.com/glue/faqs/), both read 2026-11-07, do not define a Data Catalog request or list the billed API calls. The pricing page only says you are charged for "storing and accessing table metadata". It links no such list. This section said on 2026-11-05 that it did; that was wrong. The figures below count every call, so they are an upper bound.
 
-- **Per query.** A query on one catalog table made one `GetTable` call. Above the free tier, that is $0.000001 a query. For example, 10 million such queries in a month make 9 million calls beyond the free million, which is $9, if nothing else in the account uses the free requests.
-- **Listing.** `CREATE DATABASE` and `SHOW TABLES` made 2 `GetTables` calls for each Glue database in the account. ClickHouse mounts the region's whole catalog as one database (see the banner), so a listing touches every Glue database in the region, not only this lab's.
-- **Shared free tier.** The free requests cover every caller, not only ClickHouse. In the same 2026-10-09 run, Aurora's `aurora_analytics` made 3,620 `GetTable` calls, against 24 from ClickHouse.
+**What this means.** Each point below is worked out from the tables above.
+
+- **No cache across queries.** Every query made one `GetTable` call for each catalog table it read, even when the same query ran again 6 seconds later on the same replica. A query on k tables makes k calls. Above the free tier, a one-table query costs $0.000001 in Glue calls. For example, a dashboard with 20 panels, each joining 3 tables and refreshed every minute, makes 20 × 3 × 60 × 24 × 30 = 2,592,000 calls in 30 days. That is $1.59 beyond the free million, if nothing else in the account uses the free requests.
+- **S3 per query.** A repeated one-table `count()` made 2 S3 requests, which is $0.0000007. The first query on a replica made 8. A query that reads data adds requests for the data files: the 3-table join made 29 on its first run. For example, 10 million repeated one-table queries in a month make 20 million S3 requests, which is $7.00.
+- **Listing.** `SHOW TABLES` made 2 `GetDatabases` and 2 `GetTables` calls for each Glue database in the account. That count did not grow with 40 tables in one database. ClickHouse mounts the region's whole catalog as one database (see the banner), so a listing touches every Glue database in the region. `system.tables` made no Glue calls, so BI tools that read it do not cost Glue calls, but they do not see the catalog's tables there either.
+- **Registering.** Creating a table through Athena made 6 Glue calls. 1,000 new tables would be 6,000 calls.
+- **Shared free tier.** The free requests cover every caller, not only ClickHouse. In the 2026-10-09 run, Aurora's `aurora_analytics` made 3,620 `GetTable` calls, against 24 from ClickHouse.
 - **Storage.** A lab-sized catalog, with one database and a few tables, stays inside the free million objects.
 
-**Not checked.** These have no figures yet ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)):
+**Seen during the run (2026-11-07).**
 
-- **Cache.** How many `GetTable` calls the same query makes when it runs N times, and how many a join of k tables makes. This decides the per-query figure above.
-- **Listing at scale.** How many `GetTables` calls `SHOW TABLES` and `system.tables` make on a catalog with many tables. BI tools list tables often.
-- **Counted requests.** Whether `GetTables` and `GetDatabases` count as catalog requests. The page links a full list, which was not read.
-- **S3 requests per query.** Reads of `metadata.json`, the manifest list, the manifests and the data files, taken from `system.query_log` `ProfileEvents`. S3 rates were not read for this section.
+- 2 of the 3 runs of the 3-table join failed with `S3_ERROR`: "AuthorizationHeaderMalformed … the region 'us-east-1' is wrong; expecting 'ap-northeast-2'". Their Glue calls had succeeded. The first run of the same join worked, and so did every one-table query. The integration is Beta. Joins across catalog tables were not investigated further.
+- The first attempt, at 03:54 UTC, stopped when ClickHouse Cloud replaced both replicas. `system.query_log` is kept per replica, and the old pods' rows went with them. `DROP DATABASE … SYNC` then timed out waiting for a replaced replica that was still registered. `measure.sh` therefore creates a new catalog name for each run, sets `distributed_ddl_output_mode = 'none'`, and reads `system.query_log` right after the queries.
+
+**Reproduce.** In `cost-measure/`, set `chc_iam_role_arn` and run `terraform apply`. Then run `./measure.sh tables`, `./measure.sh ch` and `./measure.sh s3` in that order. Wait about 15 minutes for CloudTrail, then run `./measure.sh trail` and `terraform destroy`. `./measure.sh cleanup` drops the catalogs it created. The raw output in `out/` holds account IDs and host names and is not committed.
+
+**Not checked.**
+
+- **Billed calls.** Which Glue calls AWS bills (see above). The billing usage report was not used.
+- **Larger catalogs.** Listing a catalog with more tables than one `GetTables` page holds, or with many Glue databases. This run had 40 tables in one database.
+- **Data-heavy queries.** S3 requests for queries that read many data files.
 
 ### Configuration
 
@@ -470,35 +496,61 @@ terraform output clickhouse_connection_info
 
 ### 비용 (AWS 쪽)
 
-`DataLakeCatalog`(`catalog_type = 'glue'`)로 페더레이션할 때 AWS 쪽에서 드는 돈은 주로 Glue Data Catalog API 호출입니다. ClickHouse Cloud 컴퓨팅 비용은 따로 청구되며 여기서 다루지 않습니다. 수치마다 출처를 적었습니다 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+`DataLakeCatalog`(`catalog_type = 'glue'`)로 페더레이션할 때 AWS 쪽에서 드는 돈은 주로 Glue Data Catalog API 호출이고, Iceberg 파일을 읽는 S3 요청이 더해집니다. ClickHouse Cloud 컴퓨팅 비용은 따로 청구되며 여기서 다루지 않습니다. 수치마다 출처를 적었습니다 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
 
-**ClickHouse가 보내는 Glue 호출.** [labs/postgres/aurora-analytics-pg-clickhouse](../../postgres/aurora-analytics-pg-clickhouse/)를 2026-10-09에 실행한 기록을 CloudTrail 이벤트 기록에서 측정했습니다. 그 실행은 ClickHouse Cloud 26.6.1, ap-northeast-2, `aws_role_arn` 인증, user agent `aws-sdk-cpp`였습니다. 이 실습은 측정하지 않았습니다. 이 실습은 ClickHouse Cloud 25.8에서 액세스 키로 마지막으로 실행했습니다.
+**ClickHouse가 보내는 Glue 호출과 S3 요청.** 2026-11-07에 [cost-measure/](cost-measure/)로 측정했습니다. ClickHouse Cloud 26.8.1.608(레플리카 2개), ap-northeast-2, `aws_role_arn` 인증, user agent `aws-sdk-cpp/1.11.771`입니다. 계정에는 Glue 데이터베이스가 하나 있었고, 그 안에 Athena로 만든 Iceberg 테이블 40개가 있었습니다. `t01`은 200,000행, 나머지는 100행씩입니다. Glue 호출은 CloudTrail 이벤트 기록에서, S3 요청은 `system.query_log`의 `ProfileEvents`(`S3GetObject`, `S3HeadObject`)에서 셌습니다. 쿼리는 6초 간격으로 하나씩 실행했습니다.
+
+| ClickHouse에서 실행한 것 | Glue 호출 | S3 요청 (GET + HEAD) |
+|---|---|---|
+| `CREATE DATABASE … ENGINE = DataLakeCatalog` | 없음 | 없음 |
+| 테이블 하나에 `SELECT count()`를 10번 | 매번 `GetTable` 1건, 모두 10건 | 레플리카마다 처음에는 4 + 4, 그 뒤로는 1 + 1 (한 번은 2 + 1) |
+| 테이블 3개 조인 | `GetTable` 3건, 테이블마다 1건 | 첫 실행에서 17 + 12, 200,200행 읽음 |
+| `SHOW TABLES`를 3번 | 매번 `GetDatabases` 2건과 `GetTables` 2건, 테이블 40개를 모두 나열 | 없음 |
+| `system.tables` 조회, 카탈로그로 거른 것과 전체 | 없음 | 없음 |
+
+`count()`는 Iceberg 메타데이터로 답했습니다(`read_rows` 1). 그래서 위의 S3 요청은 데이터 파일이 아니라 메타데이터를 읽은 것입니다. 카탈로그로 거른 `system.tables` 조회는 0행을 돌려줬습니다. 카탈로그의 테이블은 `system.tables`에 나오지 않습니다.
+
+**이전 실행.** [labs/postgres/aurora-analytics-pg-clickhouse](../../postgres/aurora-analytics-pg-clickhouse/)를 2026-10-09에 실행한 기록을 CloudTrail 이벤트 기록에서 측정했습니다. 그 실행은 ClickHouse Cloud 26.6.1, ap-northeast-2, `aws_role_arn` 인증, user agent `aws-sdk-cpp`였습니다. 위의 2026-11-07 실행도 쿼리당 호출 수가 같습니다.
 
 | ClickHouse에서 실행한 것 | Glue 호출 |
 |---|---|
 | `CREATE DATABASE … ENGINE = DataLakeCatalog`와 `SHOW TABLES` | `GetDatabases` 2건, `GetTables` 4건. 계정에 Glue 데이터베이스가 2개 있었습니다. |
 | 테이블 24개에 `SELECT count()`를 한 번씩 | `GetTable` 24건, 쿼리마다 1건 |
 
-**Glue Data Catalog 요금.** 벤더 문서: [AWS Glue 요금](https://aws.amazon.com/glue/pricing/), 2026-11-05에 읽음. 아시아 태평양(서울) 단가는 이 페이지의 가격 데이터(2026-10-12 게시)에서 가져왔고, 미국 동부(버지니아 북부)와 같습니다.
+**크롤러 없이 테이블 등록.** Athena의 `CREATE TABLE … AS SELECT`에 `table_type = 'ICEBERG'`를 주면 테이블을 쓰면서 Glue에도 직접 등록합니다. 크롤러는 돌지 않았습니다. CloudTrail에는 `athena.amazonaws.com`이 테이블마다 Glue를 6건 호출한 것으로 남았습니다(테이블 40개, 2026-11-07). `CreateTable` 1건, `GetDatabase` 1건, `GetTable` 4건입니다. `GetTable`은 `EntityNotFoundException`으로 실패했는데, 만들기 전에 테이블이 있는지 확인하는 호출이기 때문입니다. 이 호출도 ClickHouse와 같은 무료 요청을 씁니다.
+
+**요금.** Glue: 벤더 문서 [AWS Glue 요금](https://aws.amazon.com/glue/pricing/), 2026-11-05에 읽음. 아시아 태평양(서울) 단가는 이 페이지의 가격 데이터(2026-10-12 게시)에서 가져왔고, 미국 동부(버지니아 북부)와 같습니다. S3: AWS Price List API의 ap-northeast-2 S3 Standard 요청 단가, 2026-11-04 게시, 2026-11-07에 읽음.
 
 | 항목 | 매달 무료 | 초과분 |
 |---|---|---|
-| 요청. 페이지는 `GetTable`, `GetPartitions`, `CreateTable`을 예로 듭니다. | 요청 100만 건 | 100만 건당 $1.00 |
-| 저장. 테이블, 테이블 버전, 파티션, 파티션 인덱스, 통계, 데이터베이스, 카탈로그가 각각 객체 하나입니다. | 객체 100만 개 | 객체 10만 개당 월 $1.00 |
+| Glue 요청. 페이지는 `GetTable`, `GetPartitions`, `CreateTable`을 예로 듭니다. | 요청 100만 건 | 100만 건당 $1.00 |
+| Glue 저장. 테이블, 테이블 버전, 파티션, 파티션 인덱스, 통계, 데이터베이스, 카탈로그가 각각 객체 하나입니다. | 객체 100만 개 | 객체 10만 개당 월 $1.00 |
+| S3 GET과 그 밖의 모든 요청, HEAD 포함 (`APN2-Requests-Tier2`) | 없음 | 1,000건당 $0.00035 |
+| S3 PUT, COPY, POST, LIST 요청 (`APN2-Requests-Tier1`) | 없음 | 1,000건당 $0.0045 |
 
-**의미.** 아래 항목은 모두 위 두 표에서 계산한 것이고, 측정한 것이 아닙니다.
+**어떤 Glue 호출이 과금되는지.** 요금 페이지와 [Glue FAQ](https://aws.amazon.com/glue/faqs/)를 2026-11-07에 읽었는데, 둘 다 Data Catalog 요청이 무엇인지 정의하지 않고 과금되는 API 호출 목록도 없습니다. 요금 페이지는 "storing and accessing table metadata"에 과금한다고만 적고, 그런 목록에 링크하지도 않습니다. 이 절은 2026-11-05에 페이지에 목록 링크가 있다고 적었는데, 틀린 내용이었습니다. 아래 계산은 모든 호출을 요청으로 셌으므로 상한입니다.
 
-- **쿼리당.** 카탈로그 테이블 하나를 읽는 쿼리는 `GetTable`을 1건 호출했습니다. 무료 구간을 넘으면 쿼리당 $0.000001입니다. 예를 들어 한 달에 이런 쿼리를 1,000만 번 실행하면, 계정 안에서 무료 요청을 쓰는 다른 호출자가 없다고 할 때 무료 100만 건을 넘는 900만 건에 $9입니다.
-- **목록 조회.** `CREATE DATABASE`와 `SHOW TABLES`는 계정의 Glue 데이터베이스마다 `GetTables`를 2건씩 호출했습니다. ClickHouse는 리전의 카탈로그 전체를 데이터베이스 하나로 붙이므로(배너 참고), 목록을 조회하면 이 실습의 데이터베이스만이 아니라 리전의 Glue 데이터베이스 전부를 건드립니다.
-- **함께 쓰는 무료 구간.** 무료 요청은 ClickHouse만이 아니라 모든 호출자에게 적용됩니다. 같은 2026-10-09 실행에서 Aurora `aurora_analytics`는 `GetTable`을 3,620건 호출했고, ClickHouse는 24건이었습니다.
+**의미.** 아래 항목은 모두 위 표에서 계산한 것입니다.
+
+- **쿼리 사이 캐시 없음.** 같은 쿼리를 같은 레플리카에서 6초 뒤에 다시 실행해도, 쿼리마다 읽는 카탈로그 테이블 하나당 `GetTable`을 1건씩 호출했습니다. 테이블 k개를 읽는 쿼리는 k건입니다. 무료 구간을 넘으면 테이블 하나짜리 쿼리의 Glue 호출 비용은 $0.000001입니다. 예를 들어 패널 20개가 각각 테이블 3개를 조인하고 1분마다 새로 고치는 대시보드는 30일에 20 × 3 × 60 × 24 × 30 = 2,592,000건을 호출합니다. 계정 안에서 무료 요청을 쓰는 다른 호출자가 없다면 무료 100만 건을 넘는 부분이 $1.59입니다.
+- **쿼리당 S3.** 테이블 하나에 반복한 `count()`는 S3 요청 2건, $0.0000007입니다. 레플리카에서 처음 실행한 쿼리는 8건이었습니다. 데이터를 읽는 쿼리는 데이터 파일 요청이 더해집니다. 테이블 3개 조인은 첫 실행에서 29건이었습니다. 예를 들어 테이블 하나짜리 쿼리를 한 달에 1,000만 번 반복하면 S3 요청 2,000만 건, $7.00입니다.
+- **목록 조회.** `SHOW TABLES`는 계정의 Glue 데이터베이스마다 `GetDatabases` 2건과 `GetTables` 2건을 호출했습니다. 데이터베이스 하나에 테이블이 40개여도 이 수는 늘지 않았습니다. ClickHouse는 리전의 카탈로그 전체를 데이터베이스 하나로 붙이므로(배너 참고), 목록을 조회하면 리전의 Glue 데이터베이스 전부를 건드립니다. `system.tables`는 Glue를 호출하지 않았습니다. 그래서 이것을 읽는 BI 도구는 Glue 호출 비용이 들지 않지만, 거기서 카탈로그의 테이블을 보지도 못합니다.
+- **등록.** Athena로 테이블을 하나 만들 때 Glue 호출이 6건이었습니다. 새 테이블 1,000개면 6,000건입니다.
+- **함께 쓰는 무료 구간.** 무료 요청은 ClickHouse만이 아니라 모든 호출자에게 적용됩니다. 2026-10-09 실행에서 Aurora `aurora_analytics`는 `GetTable`을 3,620건 호출했고, ClickHouse는 24건이었습니다.
 - **저장.** 데이터베이스 하나에 테이블 몇 개인 실습 규모 카탈로그는 무료 객체 100만 개 안에 들어갑니다.
 
-**확인 안 된 것.** 아직 수치가 없습니다 ([#71](https://github.com/litkhai/clickhouse-cloud-aws-hols/issues/71)).
+**실행 중에 본 것 (2026-11-07).**
 
-- **캐시.** 같은 쿼리를 N번 실행할 때, 그리고 테이블 k개를 조인할 때 `GetTable`이 몇 건 나가는지. 위의 쿼리당 수치가 이것으로 정해집니다.
-- **큰 카탈로그의 목록 조회.** 테이블이 많은 카탈로그에서 `SHOW TABLES`와 `system.tables`가 `GetTables`를 몇 건 호출하는지. BI 도구는 목록을 자주 조회합니다.
-- **과금되는 요청.** `GetTables`와 `GetDatabases`가 카탈로그 요청으로 과금되는지. 페이지에 전체 목록 링크가 있지만 읽지 않았습니다.
-- **쿼리당 S3 요청.** `metadata.json`, manifest list, manifest, 데이터 파일을 읽는 요청 수를 `system.query_log`의 `ProfileEvents`로 셉니다. 이 절을 쓰면서 S3 요금은 읽지 않았습니다.
+- 테이블 3개 조인을 3번 실행했는데 그중 2번이 `S3_ERROR`로 실패했습니다: "AuthorizationHeaderMalformed … the region 'us-east-1' is wrong; expecting 'ap-northeast-2'". Glue 호출은 성공한 뒤였습니다. 같은 조인의 첫 실행과 테이블 하나짜리 쿼리는 모두 성공했습니다. 이 연동은 Beta이고, 카탈로그 테이블 사이의 조인은 더 조사하지 않았습니다.
+- 03:54 UTC의 첫 시도는 ClickHouse Cloud가 레플리카 2개를 모두 교체하면서 멈췄습니다. `system.query_log`는 레플리카마다 따로 저장되어서, 옛 pod의 기록은 pod와 함께 사라졌습니다. 그다음 `DROP DATABASE … SYNC`는 교체됐지만 아직 등록되어 있던 레플리카를 기다리다 시간 초과됐습니다. 그래서 `measure.sh`는 실행마다 새 카탈로그 이름을 만들고, `distributed_ddl_output_mode = 'none'`을 주고, 쿼리를 마치자마자 `system.query_log`를 읽습니다.
+
+**다시 실행하기.** `cost-measure/`에서 `chc_iam_role_arn`을 정하고 `terraform apply`를 실행합니다. 그다음 `./measure.sh tables`, `./measure.sh ch`, `./measure.sh s3`를 차례로 실행합니다. CloudTrail을 위해 15분쯤 기다린 뒤 `./measure.sh trail`과 `terraform destroy`를 실행합니다. `./measure.sh cleanup`은 만든 카탈로그를 지웁니다. `out/`의 원본 출력에는 계정 ID와 호스트 이름이 있어서 커밋하지 않습니다.
+
+**확인 안 된 것.**
+
+- **과금되는 호출.** AWS가 어떤 Glue 호출에 과금하는지(위 참고). 청구 사용 보고서는 보지 않았습니다.
+- **큰 카탈로그.** `GetTables` 한 페이지에 다 들어가지 않을 만큼 테이블이 많거나 Glue 데이터베이스가 많은 카탈로그의 목록 조회. 이번 실행은 데이터베이스 하나에 테이블 40개였습니다.
+- **데이터를 많이 읽는 쿼리.** 데이터 파일을 많이 읽는 쿼리의 S3 요청 수.
 
 ### 설정
 
