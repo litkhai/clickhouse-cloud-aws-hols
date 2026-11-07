@@ -1,0 +1,8 @@
+# raw run output carries account IDs, role ARNs and host names; only the README summary is published
+out/
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.auto.tfvars
+*.tfplan
