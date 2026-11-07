@@ -1,0 +1,11 @@
+# cp terraform.tfvars.example terraform.tfvars, then fill in.
+owner = "your-name"
+ttl   = "2026-11-14"
+
+# Defaults (variables.tf):
+# aws_region            = "ap-northeast-2"
+# az                    = "ap-northeast-2a"
+# client_instance_type  = "c7g.2xlarge"
+# valkey_node_type      = "cache.r7g.large"
+# valkey_engine_version = "8.1"
+# valkey_parameter_group = "default.valkey8"

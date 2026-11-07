@@ -47,6 +47,12 @@ These labs are kept, not archived, but most have not been re-run since late 2025
 | [labs/postgres/kms-decrypt-cdc](labs/postgres/kms-decrypt-cdc/) | KMS-wrapped AES-256-CBC values inside jsonb, Aurora PostgreSQL 16 → ClickPipes CDC → decrypted in ClickHouse Cloud: executable UDF calling KMS vs key kept in ClickHouse; access, failure and cost | 2026-11-04 (step by step; IAM-user path not run) |
 | [labs/postgres/clickpipes-kms-decrypt-refresh](labs/postgres/clickpipes-kms-decrypt-refresh/) | ClickPipes Postgres CDC landing ciphertext only, decryption in refreshable MVs beside the pipe: a UDF that keeps the KMS key inside (credentials bound to Cloud egress IPs) vs a key dictionary; CDC never waits, failures heal | 2026-11-04 |
 
+### ⚡ Serving (`labs/serving/`)
+
+| Lab | What it covers | Last run |
+|-----|----------------|----------|
+| [labs/serving/direct-vs-cache](labs/serving/direct-vs-cache/) | ClickHouse Cloud queried on every request at high QPS vs a cache in front: query cache, pre-aggregated tables, ElastiCache for Valkey and DynamoDB (cache-aside and as the serving store), for ad-hoc aggregation, point lookups and a hot dashboard with live inserts | 2026-11-07 (shared autoscaling service; S1 server stats partial) |
+
 ### 🔗 Related repositories
 
 | Repository | What it is |
@@ -118,6 +124,12 @@ ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 
 | [labs/postgres/aurora-analytics-pg-clickhouse](labs/postgres/aurora-analytics-pg-clickhouse/) | db.t4g에서 Aurora PostgreSQL `aurora_analytics`(내장 DuckDB), 비슷한 크기의 pg_clickhouse → ClickHouse Cloud, TPC-DS 파생 SF1·SF10·SF100, Glue + Iceberg | 2026-10-09 (일부: SF1, SF10, SF100, Glue + Iceberg 위 SF10; 대상 A·B·E·P) |
 | [labs/postgres/kms-decrypt-cdc](labs/postgres/kms-decrypt-cdc/) | jsonb 안의 KMS 보호 AES-256-CBC 값, Aurora PostgreSQL 16 → ClickPipes CDC → ClickHouse Cloud에서 복호화: KMS를 부르는 실행형 UDF vs ClickHouse에 둔 키, 접근·장애·비용 | 2026-11-04 (단계별 실행, IAM 사용자 경로 미실행) |
 | [labs/postgres/clickpipes-kms-decrypt-refresh](labs/postgres/clickpipes-kms-decrypt-refresh/) | 암호문만 적재하는 ClickPipes Postgres CDC, 파이프 옆 refreshable MV에서 복호화: KMS 키를 안에 두는 UDF(자격 증명은 Cloud egress IP에서만) vs 키 딕셔너리. CDC는 기다리지 않고 장애는 스스로 복구 | 2026-11-04 |
+
+### ⚡ 서빙 (`labs/serving/`)
+
+| 실습 | 내용 | 마지막 실행 |
+|-----|----------------|----------|
+| [labs/serving/direct-vs-cache](labs/serving/direct-vs-cache/) | 높은 QPS에서 요청마다 ClickHouse Cloud에 질의 vs 앞단 캐시: 쿼리 캐시, 사전 집계 테이블, ElastiCache for Valkey·DynamoDB(cache-aside와 서빙 저장소), 애드혹 집계·포인트 조회·실시간 적재 중인 대시보드 | 2026-11-07 (공유 오토스케일링 서비스, S1 서버 통계 일부) |
 
 ### 🔗 관련 저장소
 

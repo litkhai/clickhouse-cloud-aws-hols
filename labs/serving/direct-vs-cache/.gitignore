@@ -1,0 +1,7 @@
+config.env
+config.env.*
+ch.env
+terraform.tfvars
+.terraform/
+cachebench/bin/
+captures/
