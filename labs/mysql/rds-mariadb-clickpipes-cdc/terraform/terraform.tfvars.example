@@ -1,0 +1,4 @@
+organization_id  = ""
+service_id       = ""
+mariadb_host     = ""   # out/rds.env RDS_HOST
+# token_key, token_secret, mariadb_password: pass as TF_VAR_* environment variables
