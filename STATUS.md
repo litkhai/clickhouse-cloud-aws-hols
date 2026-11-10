@@ -9,7 +9,7 @@ GitHub secret scanning and push protection are on.
 
 ## Inventory
 
-12 labs in the README tables, every lab README bilingual (English first, `## English` / `## 한국어`). The 16 extra notes beside the two Kafka labs (`labs/kafka/terraform-confluent-aws/*.md`, `labs/kafka/terraform-confluent-aws-nlb-ssl/*.md` other than `README.md`) are English only. Published to the notes site (`lab.yaml` with `web: true`): `labs/billing/usage-cost`, `labs/s3/terraform-chc-secures3-aws`, `labs/postgres/kms-decrypt-cdc`.
+12 labs in the README tables, every lab README bilingual (English first, `## English` / `## 한국어`). The 16 extra notes beside the two Kafka labs (`labs/kafka/terraform-confluent-aws/*.md`, `labs/kafka/terraform-confluent-aws-nlb-ssl/*.md` other than `README.md`) are English only. Published to the notes site (`lab.yaml` with `web: true`): `labs/billing/usage-cost`, `labs/s3/terraform-chc-secures3-aws`, `labs/postgres/kms-decrypt-cdc`, `labs/mysql/rds-mariadb-clickpipes-cdc`.
 
 ## Open work
 
