@@ -42,6 +42,7 @@ cp env.example .env                 # fill in the OpenAPI key, ORG_ID, SERVICE_I
 | ![ClickPipes list](img/01-clickpipes-list.png) | ![Create: Amazon RDS for MariaDB](img/02-create-rds-mariadb.png) |
 | ![Pipe metrics](img/03-pipe-metrics.png) | ![Pipe settings](img/04-pipe-settings.png) |
 | ![Region us-east-2 (service created 2025-11-14)](img/05-pipe-region-us-east-2.png) | ![Region ap-northeast-2 (service created 2026-11-10)](img/06-pipe-region-ap-northeast-2.png) |
+| ![Console: retention 24 rejected](img/07-console-retention-24-rejected.png) | ![Console: retention 72, next step](img/08-console-retention-72-next-step.png) |
 
 ### Cost
 
