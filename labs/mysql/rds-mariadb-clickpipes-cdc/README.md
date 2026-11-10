@@ -1,8 +1,8 @@
 # RDS MariaDB as a ClickPipes MySQL CDC source — binlog retention and source setup
 
-> **Last run: 2026-11-10** — AWS `ap-northeast-2`: RDS MariaDB 11.8.9 and 10.11.19, RDS MySQL 8.4.13 (`db.t4g.micro`), two ClickHouse Cloud services (ClickPipes in `us-east-2` and in `ap-northeast-2`), ClickPipes OpenAPI and Terraform `ClickHouse/clickhouse` 3.41.0 / 3.42.0. Steps ran by hand with the same commands; `02-source.sh` and `03-try-pipe.sh` then ran as files. `01-rds.sh` and `99-destroy.sh` were not run as files. Details: [`RUN-2026-11-10.md`](RUN-2026-11-10.md).
+> **Last run: 2026-11-10** — AWS `ap-northeast-2`: RDS MariaDB 11.8.9 and 10.11.19, RDS MySQL 8.4.13 (`db.t4g.micro`); a second run (06:49–06:55 UTC) added RDS MariaDB 10.5.28 / 10.6.23, Aurora MySQL 3.14.0 and MySQL 8.4 / MariaDB 11.8 containers on EC2; two ClickHouse Cloud services (ClickPipes in `us-east-2` and in `ap-northeast-2`), ClickPipes OpenAPI and Terraform `ClickHouse/clickhouse` 3.41.0 / 3.42.0. Steps ran by hand with the same commands; `02-source.sh` and `03-try-pipe.sh` then ran as files. `01-rds.sh` and `99-destroy.sh` were not run as files. Details: [`RUN-2026-11-10.md`](RUN-2026-11-10.md).
 >
-> **마지막 실행: 2026-11-10** — AWS `ap-northeast-2`: RDS MariaDB 11.8.9·10.11.19, RDS MySQL 8.4.13(`db.t4g.micro`), ClickHouse Cloud 서비스 2개(ClickPipes가 `us-east-2`인 것과 `ap-northeast-2`인 것), ClickPipes OpenAPI와 Terraform `ClickHouse/clickhouse` 3.41.0·3.42.0. 같은 명령으로 손으로 먼저 실행했고, 이어서 `02-source.sh`·`03-try-pipe.sh`를 파일 그대로 실행했다. `01-rds.sh`·`99-destroy.sh`는 파일로 실행하지 않았다. 자세한 기록: [`RUN-2026-11-10.md`](RUN-2026-11-10.md).
+> **마지막 실행: 2026-11-10** — AWS `ap-northeast-2`: RDS MariaDB 11.8.9·10.11.19, RDS MySQL 8.4.13(`db.t4g.micro`). 두 번째 실행(06:49–06:55 UTC)에서 RDS MariaDB 10.5.28·10.6.23, Aurora MySQL 3.14.0, EC2 위 MySQL 8.4·MariaDB 11.8 컨테이너를 더했다. ClickHouse Cloud 서비스 2개(ClickPipes가 `us-east-2`인 것과 `ap-northeast-2`인 것), ClickPipes OpenAPI와 Terraform `ClickHouse/clickhouse` 3.41.0·3.42.0. 같은 명령으로 손으로 먼저 실행했고, 이어서 `02-source.sh`·`03-try-pipe.sh`를 파일 그대로 실행했다. `01-rds.sh`·`99-destroy.sh`는 파일로 실행하지 않았다. 자세한 기록: [`RUN-2026-11-10.md`](RUN-2026-11-10.md).
 
 [English](#english) | [한국어](#한국어)
 
@@ -17,6 +17,8 @@ Builds an RDS MariaDB source the way ClickPipes MySQL CDC expects it, then creat
 - **72 hours is the floor.** With the ClickPipes user able to read `mysql.rds_configuration`, `binlog retention hours` unset, 24 or 71 is rejected: `RDS/Aurora setting 'binlog retention hours' should be at least 72, currently 24`. 72 and 168 are accepted. RDS MySQL behaves the same.
 - **Grant `SELECT ON mysql.rds_configuration`.** The create call reads the retention from that table; without access it skips the check and the pipe is created at any retention.
 - **MariaDB needs `SLAVE MONITOR`** besides `REPLICATION CLIENT` and `REPLICATION SLAVE`: without it the create call fails with `ERROR 1227 … SLAVE MONITOR privilege` (11.8.9 and 10.11.19).
+- **Same checks on Aurora MySQL 3.14.0 and on MariaDB 10.5.28 / 10.6.23** (second run, `RUN-2026-11-10.md`). Without an RDS setting to read — self-managed MySQL 8.4 / MariaDB 11.8 — the floor is `binlog_expire_logs_seconds` ≥ 259200 (72 hours).
+- **Grant to the same `user@host` you created.** A `GRANT … TO 'clickpipes_user'@'%'` for a user created at another host fails (`ERROR 1133` on MariaDB, `ERROR 1410` on MySQL and Aurora).
 - **The source type must match the engine.** `rdsmysql` on MariaDB: `server appears to be MariaDB but MySQL source has been selected`; `rdsmariadb` on MySQL: the reverse.
 - **Admit the IPs of the region the pipes run in.** The pipe's Details tab shows it. A service created on 2025-11-14 ran its pipes in `us-east-2`; one created on 2026-11-10 ran them in `ap-northeast-2`.
 
@@ -59,6 +61,8 @@ ClickPipes MySQL CDC가 기대하는 대로 RDS MariaDB 소스를 만든 뒤, �
 - **하한은 72시간이다.** ClickPipes 사용자가 `mysql.rds_configuration`을 읽을 수 있으면 `binlog retention hours`가 미설정·24·71일 때 거부된다: `RDS/Aurora setting 'binlog retention hours' should be at least 72, currently 24`. 72와 168은 통과. RDS MySQL도 같다.
 - **`SELECT ON mysql.rds_configuration`을 준다.** 생성 호출은 보관 시간을 이 테이블에서 읽는다. 읽지 못하면 검사를 건너뛰고 보관 시간과 상관없이 파이프가 만들어진다.
 - **MariaDB는 `SLAVE MONITOR`가 필요하다.** `REPLICATION CLIENT`·`REPLICATION SLAVE`만으로는 `ERROR 1227 … SLAVE MONITOR privilege`로 실패한다(11.8.9, 10.11.19).
+- **Aurora MySQL 3.14.0과 MariaDB 10.5.28·10.6.23도 검사가 같다**(두 번째 실행, `RUN-2026-11-10.md`). RDS 설정이 없는 직접 운영 MySQL 8.4·MariaDB 11.8은 `binlog_expire_logs_seconds` ≥ 259200(72시간)이 하한이다.
+- **GRANT는 만든 `user@host` 그대로 준다.** 다른 호스트로 만든 사용자에게 `'clickpipes_user'@'%'`로 GRANT하면 실패한다(MariaDB `ERROR 1133`, MySQL·Aurora `ERROR 1410`).
 - **소스 타입은 엔진과 맞아야 한다.** MariaDB에 `rdsmysql`: `server appears to be MariaDB but MySQL source has been selected`, MySQL에 `rdsmariadb`: 반대 메시지.
 - **파이프가 도는 리전의 IP를 연다.** 파이프 Details 탭에 나온다. 2025-11-14에 만든 서비스는 `us-east-2`, 2026-11-10에 만든 서비스는 `ap-northeast-2`였다.
 
