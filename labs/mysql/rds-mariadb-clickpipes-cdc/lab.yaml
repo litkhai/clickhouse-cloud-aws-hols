@@ -1,0 +1,10 @@
+# Runner keys (tools/lab.schema.md): hol does not run this lab (RDS + ClickHouse Cloud + ClickPipes), so no clickhouse key.
+# verified_on is the ClickPipes path, not a ClickHouse build: last run 2026-11-10 (RUN-2026-11-10.md).
+# Publishing keys: not published yet (owner's choice).
+web: false
+title_ko: "RDS MariaDB를 ClickPipes MySQL CDC로: binlog 보관 72시간과 준비 설정"
+summary_ko: "RDS MariaDB 11.8을 ClickPipes MySQL CDC 소스로 준비하고, 생성 시점의 binlog 보관 시간·소스 타입·권한 검사를 API와 콘솔로 확인하는 실습입니다."
+title_en: "RDS MariaDB with ClickPipes MySQL CDC: 72h binlog retention and source setup"
+summary_en: "Prepare RDS MariaDB 11.8 as a ClickPipes MySQL CDC source and check what the create call validates — binlog retention, source type and grants — through the API and the console."
+category: cloud
+tags: [mysql, clickpipes, ingestion]
