@@ -79,7 +79,12 @@ cp env.example .env                 # OpenAPI 키, ORG_ID, SERVICE_ID 입력
 
 ### 화면
 
-위 English 절의 표와 같다.
+| | |
+|---|---|
+| ![ClickPipes 목록](img/01-clickpipes-list.png) | ![Create ClickPipe: Amazon RDS for MariaDB](img/02-create-rds-mariadb.png) |
+| ![파이프 Metrics](img/03-pipe-metrics.png) | ![파이프 Settings](img/04-pipe-settings.png) |
+| ![Region us-east-2 (2025-11-14에 만든 서비스)](img/05-pipe-region-us-east-2.png) | ![Region ap-northeast-2 (2026-11-10에 만든 서비스)](img/06-pipe-region-ap-northeast-2.png) |
+| ![콘솔: 보관 24시간 거부](img/07-console-retention-24-rejected.png) | ![콘솔: 보관 72시간, 다음 단계](img/08-console-retention-72-next-step.png) |
 
 ### 비용
 
