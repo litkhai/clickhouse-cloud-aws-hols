@@ -4,7 +4,7 @@
 
 ## English
 
-Terraform labs that stand up AWS-side infrastructure for ClickHouse Cloud — Confluent Kafka, MinIO and Glue data lakes, and secure S3 access — and a billing lab that reads the Usage Cost API and creates nothing, and Postgres labs on Aurora's embedded DuckDB and pg_clickhouse, and on decrypting KMS-protected values after ClickPipes CDC.
+Terraform labs that stand up AWS-side infrastructure for ClickHouse Cloud — Confluent Kafka, MinIO and Glue data lakes, and secure S3 access — and a billing lab that reads the Usage Cost API and creates nothing, and Postgres labs on Aurora's embedded DuckDB and pg_clickhouse, and on decrypting KMS-protected values after ClickPipes CDC, a MySQL / MariaDB lab on RDS MariaDB as a ClickPipes CDC source, and a serving lab that compares querying ClickHouse Cloud directly with a cache in front.
 
 > This repository was split out of [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols) on the `pre-split-2026-10` tag, with history. The last version of these labs in the original repository: https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10
 
@@ -88,7 +88,7 @@ After changing a `lab.yaml`, run `python3 tools/labs_json.py` and commit the fil
 
 ## 한국어
 
-ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 실습(Confluent Kafka, MinIO·Glue 데이터 레이크, 보안 S3 접근)과, 아무것도 만들지 않고 Usage Cost API만 읽는 빌링 실습, Aurora 내장 DuckDB와 pg_clickhouse, ClickPipes CDC 뒤 KMS 보호 값 복호화를 다루는 Postgres 실습입니다.
+ClickHouse Cloud와 연동할 AWS 쪽 인프라를 Terraform으로 구성하는 실습(Confluent Kafka, MinIO·Glue 데이터 레이크, 보안 S3 접근)과, 아무것도 만들지 않고 Usage Cost API만 읽는 빌링 실습, Aurora 내장 DuckDB와 pg_clickhouse, ClickPipes CDC 뒤 KMS 보호 값 복호화를 다루는 Postgres 실습, RDS MariaDB를 ClickPipes CDC 소스로 쓰는 MySQL / MariaDB 실습, ClickHouse Cloud 직접 질의와 앞단 캐시를 비교하는 서빙 실습입니다.
 
 > 이 저장소는 [litkhai/clickhouse-hols](https://github.com/litkhai/clickhouse-hols)의 `pre-split-2026-10` 태그 시점에서 히스토리와 함께 분리했습니다. 원래 저장소에 있던 마지막 버전: https://github.com/litkhai/clickhouse-hols/tree/pre-split-2026-10
 
