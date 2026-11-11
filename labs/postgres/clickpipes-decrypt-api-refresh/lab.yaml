@@ -1,0 +1,3 @@
+# Runner key (tools/lab.schema.md): the build the lab last ran against, 2026-11-11 (README banner).
+# hol does not run this lab (ClickHouse Cloud + ClickPipes + AWS), so there is no clickhouse key.
+verified_on: 26.6.1.2455
