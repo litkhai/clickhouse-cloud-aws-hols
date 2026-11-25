@@ -1,0 +1,85 @@
+{
+  "emr": {
+    "cluster": "j-0314805349VE9LNW9OUF",
+    "release": "emr-7.14.0",
+    "nodes": [
+      {
+        "group": "MASTER",
+        "type": "m7g.xlarge",
+        "count": 1,
+        "ec2_per_hour": 0.2006,
+        "emr_per_hour": 0.0408
+      },
+      {
+        "group": "CORE",
+        "type": "m7g.2xlarge",
+        "count": 4,
+        "ec2_per_hour": 0.4012,
+        "emr_per_hour": 0.0816
+      }
+    ],
+    "ebs_gb": {
+      "gp2": 576,
+      "gp3": 75
+    },
+    "ebs_usd_per_hour": 0.0993,
+    "usd_per_hour": 2.2719,
+    "seconds_to_ready": 350.977,
+    "lifetime_seconds": 1518.766,
+    "lifetime_usd": 0.9585,
+    "steps": [
+      {
+        "step": "bi",
+        "state": "COMPLETED",
+        "seconds": 96.073,
+        "usd_at_cluster_rate": 0.0606
+      },
+      {
+        "step": "day31",
+        "state": "COMPLETED",
+        "seconds": 32.065,
+        "usd_at_cluster_rate": 0.0202
+      },
+      {
+        "step": "explode",
+        "state": "COMPLETED",
+        "seconds": 52.074,
+        "usd_at_cluster_rate": 0.0329
+      },
+      {
+        "step": "gen",
+        "state": "COMPLETED",
+        "seconds": 94.216,
+        "usd_at_cluster_rate": 0.0595
+      }
+    ]
+  },
+  "clickhouse_usage_cost": {
+    "date": "2026-11-25",
+    "service_records": [
+      {
+        "entityType": "service",
+        "locked": false,
+        "metrics": {
+          "publicDataTransferCHC": 0.008,
+          "interRegionTier1DataTransferCHC": 0.001,
+          "interRegionTier2DataTransferCHC": 0,
+          "interRegionTier3DataTransferCHC": 0,
+          "interRegionTier4DataTransferCHC": 0,
+          "computeCHC": 10.082
+        },
+        "totalCHC": 10.091
+      },
+      {
+        "entityType": "clickpipe",
+        "locked": false,
+        "metrics": {
+          "dataTransferCHC": 0.109,
+          "computeCHC": 0.131,
+          "initialLoadCHC": 0
+        },
+        "totalCHC": 0.24
+      }
+    ]
+  }
+}
