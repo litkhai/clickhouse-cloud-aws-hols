@@ -8,6 +8,8 @@
 
 ## English
 
+> **Related notes**: [Serving Hive ORC Tables on S3 with ClickHouse Cloud: Measured Side by Side with EMR](https://clickhouse.litkhai.dev/en/articles/cloud/hive-orc-s3-serving-vs-emr/)
+
 A game company runs Hadoop in its own data center: Hive tables stored as ORC, partitioned by day, with a Hive catalog. It is moving to AWS and weighs a hybrid: keep the tables in S3 under a Hive-compatible catalog, and put ClickHouse Cloud in front as the serving layer, against running the same work on EMR. This lab builds that estate with generated game logs and measures both sides.
 
 ### Answer
@@ -85,6 +87,8 @@ All 31 captures, with the step log and exact messages, are in [`results/RUN-2026
 - Not tried: Spot or Graviton sizing on EMR, EMR Serverless, a larger or tuned ClickHouse service (`max_insert_threads`), more than 150 M rows.
 
 ## 한국어
+
+> **관련 노트**: [S3의 Hive ORC 테이블을 ClickHouse Cloud로 서빙하기: 같은 작업을 EMR과 나란히 재 보기](https://clickhouse.litkhai.dev/articles/cloud/hive-orc-s3-serving-vs-emr/)
 
 한 게임사가 자체 데이터센터에서 Hadoop을 운영한다. Hive 테이블은 ORC로 저장되고 일 단위로 파티셔닝되며, Hive 카탈로그가 있다. AWS로 옮기면서 하이브리드 구성을 검토한다. 테이블은 Hive 호환 카탈로그 아래 S3에 두고, 서빙 레이어로 ClickHouse Cloud를 앞에 두는 구성이다. 같은 작업을 EMR에서 돌리는 경우와 비교한다. 이 실습은 생성한 게임 로그로 그 환경을 만들고 양쪽을 측정한다.
 
