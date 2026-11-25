@@ -1,0 +1,2 @@
+region           = "ap-northeast-2"
+chc_iam_role_arn = "arn:aws:iam::<clickhouse-account>:role/CH-S3-<...>-Role"

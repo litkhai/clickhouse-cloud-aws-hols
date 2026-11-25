@@ -1,0 +1,8 @@
+.env
+terraform/.terraform/
+terraform/*.tfstate*
+terraform/tfplan*
+terraform/terraform.tfvars
+results/raw/
+.cluster-id
+.steps
